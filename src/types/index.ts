@@ -1,0 +1,131 @@
+// Genel domain tipleri — UI ve form işlemlerinde kullanılır
+// Supabase Row tipleri: @/supabase/types.ts
+// Sabitler: @/lib/constants
+
+export interface DonemSecici {
+  yil: number;
+  ay: number;
+}
+
+export interface PaginationParams {
+  sayfa: number;
+  sayfaBasi: number;
+}
+
+export interface FilterParams {
+  arama?: string;
+  durum?: "aktif" | "pasif" | "tumu";
+}
+
+export interface EkOdeme {
+  aciklama: string;
+  tutar: number;
+}
+
+export interface EkKesinti {
+  aciklama: string;
+  tutar: number;
+}
+
+export interface BordroNot {
+  icerik: string;
+}
+
+export interface ResmiTatil {
+  tarih: string; // "MM-DD" formatında
+  ad: string;
+}
+
+export interface ApiHata {
+  mesaj: string;
+  kod?: string;
+}
+
+// Form durumu yardımcı tipi
+export type FormDurumu<T = undefined> =
+  | { durum: "bos" }
+  | { durum: "yukleniyor" }
+  | { durum: "basarili"; veri?: T }
+  | { durum: "hata"; hata: string };
+
+// ─── Puantaj Modülü ──────────────────────────────────────────────────────────
+
+/**
+ * Özel durum kodları:
+ * YI = Yıllık İzin | RT = Resmi Tatil | RP = Raporlu
+ * CY = Çalışma Yok | UI = Ücretsiz İzin | PM = Pazar Mesaisi | IK = İş Kazası
+ */
+export type OzelDurum = "YI" | "RT" | "RP" | "CY" | "UI" | "PM" | "IK";
+
+/** Bir güne ait puantaj verisi (form ve grid hücrelerinde kullanılır) */
+export interface PuantajGunVerisi {
+  giris_saati?: string | null;
+  cikis_saati?: string | null;
+  calisma_saati?: number | null;
+  ozel_durum?: OzelDurum | null;
+  aciklama?: string | null;
+  /** Fazla mesai saati (opsiyonel) — puantaj_genel.mesai_saati alanına yazılır */
+  mesai_saati?: number | null;
+}
+
+// ─── Proje Modülü ─────────────────────────────────────────────────────────────
+
+/** Proforma veya Fatura kodu satırı */
+export interface FaturaKodu {
+  tip: "Fatura" | "Proforma";
+  kod: string;
+  tarih: string; // "YYYY-MM-DD"
+}
+
+// ─── Cari / Fatura Modülü ─────────────────────────────────────────────────────
+
+export type ParaBirimi = "TRY" | "EUR" | "USD";
+export type BelgeTur = "proforma" | "fatura";
+export type OdemeDurumu = "odenmedi" | "kismi" | "odendi";
+export type OdemeYontem = "banka" | "elden";
+
+/** Belge kalem satırı (kalemler JSON alanı içindeki her eleman) */
+export interface BelgeKalem {
+  id: string; // client-side uuid, DB'ye yazılmaz
+  aciklama: string;
+  miktar: number;
+  birim: string;
+  birim_fiyat: number;
+  iskonto: number; // satır bazlı iskonto (tutar olarak)
+}
+
+/** Gemi listesi satırı (KPI hesaplamalarıyla birlikte) */
+export interface GemiOzet {
+  id: string;
+  ad: string;
+  imo_no: string | null;
+  sirket_ad: string;
+  toplam_alacak: Record<ParaBirimi, number>;
+  odenen: Record<ParaBirimi, number>;
+  kalan: Record<ParaBirimi, number>;
+}
+
+/** Belge satırı (ödeme durumu dahil) */
+export interface BelgeOzet {
+  id: string;
+  tur: BelgeTur;
+  belge_no: string;
+  tarih: string;
+  toplam: number;
+  iskonto: number;
+  genel_toplam: number;
+  para_birimi: ParaBirimi;
+  odeme_durumu: OdemeDurumu;
+  odenen_toplam: number;
+  kalan: number;
+  ilgili_kisi_ad?: string | null;
+}
+
+/** KPI özet verisi (para birimi bazlı) */
+export interface CariKpi {
+  para_birimi: ParaBirimi;
+  toplam_alacak: number;
+  odenen: number;
+  odenmemis: number;
+}
+
