@@ -29,6 +29,8 @@ import { personelCikisYap } from "@/app/actions/personel";
 import { QUERY_KEYS } from "@/lib/constants";
 import { formatTarih, formatPara, formatAdSoyad } from "@/lib/utils/index";
 import { HizliPersonelEkleDialog } from "./HizliPersonelEkleDialog";
+import { ExcelSutunSeciciModal } from "@/components/ui/ExcelSutunSeciciModal";
+import { personelListesiExport, PERSONEL_TUM_SUTUNLAR, PERSONEL_SUTUN_SETLERI } from "@/lib/excel/personelExport";
 
 // ─────────────────────────────────────────────
 // KPI Kartları
@@ -170,6 +172,7 @@ export function PersonelListesiView() {
   const { personelTab, personelArama, setPersonelTab, setPersonelArama, setPersonelEkleAcik } = useUIStore();
   const [cikisPersonel, setCikisPersonel] = useState<PersonelListeItem | null>(null);
   const [sort, setSort] = useState<SortState<PersonelSortField>>({ field: "adSoyad", dir: "asc" });
+  const [excelModalAcik, setExcelModalAcik] = useState(false);
 
   const { data: liste = [], isLoading, isError } = usePersonelList();
   const kpi = usePersonelKpi(liste);
@@ -214,6 +217,16 @@ export function PersonelListesiView() {
           <Button id="btn-personel-ekle" onClick={() => router.push("/personel/yeni")}>
             <UserPlus className="h-4 w-4 mr-2" />
             Personel Ekle
+          </Button>
+          <Button
+            id="btn-personel-excel"
+            variant="outline"
+            size="sm"
+            onClick={() => setExcelModalAcik(true)}
+            disabled={isLoading}
+            className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-700"
+          >
+            Excel&#39;e Aktar
           </Button>
         </div>
       </div>
@@ -381,6 +394,16 @@ export function PersonelListesiView() {
       <ListeCikisDialog
         personel={cikisPersonel}
         onKapat={() => setCikisPersonel(null)}
+      />
+
+      {/* Excel Sütun Seçici */}
+      <ExcelSutunSeciciModal
+        acik={excelModalAcik}
+        onKapat={() => setExcelModalAcik(false)}
+        baslik="Personel Listesi — Excel'e Aktar"
+        tumSutunlar={PERSONEL_TUM_SUTUNLAR}
+        sutunSetleri={PERSONEL_SUTUN_SETLERI}
+        onExport={(sutunlar) => personelListesiExport(liste, { sutunlar })}
       />
     </div>
   );

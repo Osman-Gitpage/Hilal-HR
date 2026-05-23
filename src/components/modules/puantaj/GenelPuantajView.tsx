@@ -43,6 +43,8 @@ import type { OzelDurum } from "@/types";
 import { Input } from "@/components/ui/input";
 import { GunVeriGirisiModal } from "./GunVeriGirisiModal";
 import { TopluGunGirisiPanel } from "./TopluGunGirisiPanel";
+import { ExcelExportButton } from "@/components/ui/ExcelExportButton";
+import { puantajExport } from "@/lib/excel/puantajExport";
 
 // ─────────────────────────────────────────────
 // Sabitler
@@ -481,6 +483,22 @@ export function GenelPuantajView() {
               <LockOpen className="h-4 w-4" />
               Kilidi Aç
             </Button>
+          )}
+          {/* Excel Export */}
+          {!isLoading && personeller.length > 0 && (
+            <ExcelExportButton
+              id="btn-puantaj-excel"
+              label="Excel'e Aktar"
+              onExport={() =>
+                puantajExport({
+                  personeller,
+                  puantajlar: data?.puantajlar ?? [],
+                  ozetler,
+                  yil,
+                  ay,
+                })
+              }
+            />
           )}
         </div>
       </div>

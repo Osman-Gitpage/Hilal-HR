@@ -43,6 +43,8 @@ import type { Proje } from "@/supabase/app-types";
 import type { OzelDurum } from "@/types";
 import { GunVeriGirisiModal } from "./GunVeriGirisiModal";
 import Link from "next/link";
+import { ExcelExportButton } from "@/components/ui/ExcelExportButton";
+import { projePuantajExport } from "@/lib/excel/puantajExport";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sabitler
@@ -309,6 +311,23 @@ export function ProjePuantajView() {
           <Badge variant="outline" className="text-xs gap-1.5">
             {seciliProje.firma_adi ?? ""}
           </Badge>
+        )}
+
+        {/* Excel Export */}
+        {seciliProje && !isLoading && personeller.length > 0 && (
+          <ExcelExportButton
+            id="btn-proje-puantaj-excel"
+            label="Excel'e Aktar"
+            onExport={() =>
+              projePuantajExport({
+                personeller,
+                satirlar: satirlar as never,
+                projeAdi: seciliProje.ad,
+                yil,
+                ay,
+              })
+            }
+          />
         )}
       </div>
 

@@ -27,6 +27,8 @@ import { GemiEkleModal } from "./GemiEkleModal";
 import { gemiSil } from "@/app/actions/cari";
 import { paraFormat } from "@/lib/cari";
 import type { ParaBirimi } from "@/types";
+import { ExcelSutunSeciciModal } from "@/components/ui/ExcelSutunSeciciModal";
+import { gemiListesiExport, GEMI_TUM_SUTUNLAR, GEMI_SUTUN_SETLERI } from "@/lib/excel/cariExport";
 
 // ─────────────────────────────────────────────
 // KPI Kart
@@ -125,6 +127,7 @@ export function CariListesiView() {
   const [ekleAcik, setEkleAcik] = useState(false);
   const [silGemiId, setSilGemiId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [excelModalAcik, setExcelModalAcik] = useState(false);
 
   const { data: gemiler = [], isLoading: gemiLoading } = useGemiList();
   const { data: kpiData = [], isLoading: kpiLoading } = useCariKpi();
@@ -182,6 +185,16 @@ export function CariListesiView() {
           <Button id="btn-gemi-ekle" onClick={() => setEkleAcik(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Gemi Ekle
+          </Button>
+          <Button
+            id="btn-gemi-excel"
+            variant="outline"
+            size="sm"
+            onClick={() => setExcelModalAcik(true)}
+            disabled={gemiLoading}
+            className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-700"
+          >
+            Excel&apos;e Aktar
           </Button>
         </div>
       </div>
@@ -339,6 +352,16 @@ export function CariListesiView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Excel Sütun Seçici */}
+      <ExcelSutunSeciciModal
+        acik={excelModalAcik}
+        onKapat={() => setExcelModalAcik(false)}
+        baslik="Gemi Listesi — Excel'e Aktar"
+        tumSutunlar={GEMI_TUM_SUTUNLAR}
+        sutunSetleri={GEMI_SUTUN_SETLERI}
+        onExport={(sutunlar) => gemiListesiExport(filtrelenmis, { sutunlar })}
+      />
     </div>
   );
 }

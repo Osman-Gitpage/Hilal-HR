@@ -17,6 +17,8 @@ import {
 import { useTumBelgeList, useCariKpi } from "@/hooks/useCari";
 import { paraFormat } from "@/lib/cari";
 import type { ParaBirimi } from "@/types";
+import { ExcelSutunSeciciModal } from "@/components/ui/ExcelSutunSeciciModal";
+import { belgeListesiExport, BELGE_TUM_SUTUNLAR, BELGE_SUTUN_SETLERI } from "@/lib/excel/cariExport";
 
 // ─────────────────────────────────────────────
 // KPI Kart
@@ -119,6 +121,7 @@ export function BelgeListesiView() {
   const [arama, setArama] = useState("");
   const [turFiltre, setTurFiltre] = useState<TurFiltre>("tumu");
   const [durumFiltre, setDurumFiltre] = useState<DurumFiltre>("tumu");
+  const [excelModalAcik, setExcelModalAcik] = useState(false);
 
   const { data: kpiData = [], isLoading: kpiLoading } = useCariKpi();
 
@@ -157,6 +160,16 @@ export function BelgeListesiView() {
           <Button id="btn-belge-ekle" onClick={() => router.push("/cari/belge/yeni")}>
             <Plus className="h-4 w-4 mr-2" />
             Belge Ekle
+          </Button>
+          <Button
+            id="btn-belge-excel"
+            variant="outline"
+            size="sm"
+            onClick={() => setExcelModalAcik(true)}
+            disabled={belgeLoading}
+            className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-700"
+          >
+            Excel&apos;e Aktar
           </Button>
         </div>
       </div>
@@ -323,6 +336,16 @@ export function BelgeListesiView() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Excel Sütun Seçici */}
+      <ExcelSutunSeciciModal
+        acik={excelModalAcik}
+        onKapat={() => setExcelModalAcik(false)}
+        baslik="Belge Listesi — Excel'e Aktar"
+        tumSutunlar={BELGE_TUM_SUTUNLAR}
+        sutunSetleri={BELGE_SUTUN_SETLERI}
+        onExport={(sutunlar) => belgeListesiExport(belgeler, { sutunlar })}
+      />
     </div>
   );
 }

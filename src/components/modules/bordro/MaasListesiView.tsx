@@ -27,6 +27,8 @@ import { bordroDurumGuncelle, revizyonBaslat } from "@/app/actions/maas";
 import { formatPara, formatAdSoyad } from "@/lib/utils/index";
 import { VARSAYILAN_AYLIK_CALISMA_SAATI, AY_ADLARI } from "@/lib/constants";
 import { DonemSecici } from "@/components/modules/bordro/DonemSecici";
+import { ExcelSutunSeciciModal } from "@/components/ui/ExcelSutunSeciciModal";
+import { bordroListesiExport, BORDRO_TUM_SUTUNLAR, BORDRO_SUTUN_SETLERI } from "@/lib/excel/bordroExport";
 
 // ─────────────────────────────────────────────
 // Durum Badge
@@ -96,6 +98,7 @@ export function MaasListesiView() {
   const [isPending, startTransition] = useTransition();
   const [sort, setSort] = useState<SortState<BordroSortField>>({ field: "adSoyad", dir: "asc" });
   const [revizyonYukleniyor, setRevizyonYukleniyor] = useState<string | null>(null);
+  const [excelModalAcik, setExcelModalAcik] = useState(false);
   const { data: ayarlar } = useAyarlar();
   const aylikCalisma = ayarlar?.aylik_calisma_saati ?? VARSAYILAN_AYLIK_CALISMA_SAATI;
   const invalidate = useInvalidateBordro();
@@ -165,6 +168,16 @@ export function MaasListesiView() {
       {/* Üst bar */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <DonemSecici />
+        <Button
+          id="btn-bordro-excel"
+          variant="outline"
+          size="sm"
+          onClick={() => setExcelModalAcik(true)}
+          disabled={isLoading || bordro_listesi.length === 0}
+          className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-700"
+        >
+          Excel&apos;e Aktar
+        </Button>
       </div>
 
       {/* KPI */}
@@ -365,6 +378,23 @@ export function MaasListesiView() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Excel Sütun Seçici */}
+      <ExcelSutunSeciciModal
+        acik={excelModalAcik}
+        onKapat={() => setExcelModalAcik(false)}
+        baslik={`${AY_ADLARI[seciliDonemAy]} ${seciliDonemYil} Bordro — Excel'e Aktar`}
+        tumSutunlar={BORDRO_TUM_SUTUNLAR}
+        sutunSetleri={BORDRO_SUTUN_SETLERI}
+        onExport={(sutunlar) =>
+          bordroListesiExport(bordro_listesi, {
+            sutunlar: sutunlar as never,
+            yil: seciliDonemYil,
+            ay: seciliDonemAy,
+            aylikCalisma: aylikCalisma,
+          })
+        }
+      />
     </div>
   );
 }

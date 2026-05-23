@@ -14,6 +14,8 @@ import { bankaOdemeKaydet } from "@/app/actions/maas";
 import { bankaEldenHesapla } from "@/lib/utils/maasHesap";
 import { formatPara, formatAdSoyad, num } from "@/lib/utils/index";
 import { DonemSecici } from "@/components/modules/bordro/DonemSecici";
+import { ExcelSutunSeciciModal } from "@/components/ui/ExcelSutunSeciciModal";
+import { bankaOdemeExport, BANKA_TUM_SUTUNLAR, BANKA_SUTUN_SETLERI } from "@/lib/excel/bankaExport";
 
 interface SatirState {
   bordro_id: string;
@@ -34,6 +36,7 @@ export function BankaOdemeView() {
   );
   const [yerelDuzenlemeler, setYerelDuzenlemeler] = useState<Record<string, SatirState>>({});
   const [isPending, startTransition] = useTransition();
+  const [excelModalAcik, setExcelModalAcik] = useState(false);
 
   // Satir state: yerel düzenleme varsa onu, yoksa hook verisini kullan
   const getSatir = (b: BankaOdemeSatiri): SatirState => {
@@ -99,10 +102,22 @@ export function BankaOdemeView() {
       {/* Üst bar */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <DonemSecici />
-        <Button id="btn-banka-kaydet" onClick={handleKaydet} disabled={isPending || satirListesi.length === 0} className="gap-2">
-          {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Kaydet
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            id="btn-banka-excel"
+            variant="outline"
+            size="sm"
+            onClick={() => setExcelModalAcik(true)}
+            disabled={isLoading || satirListesi.length === 0}
+            className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-700"
+          >
+            Excel&apos;e Aktar
+          </Button>
+          <Button id="btn-banka-kaydet" onClick={handleKaydet} disabled={isPending || satirListesi.length === 0} className="gap-2">
+            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Kaydet
+          </Button>
+        </div>
       </div>
 
       {/* KPI */}
@@ -227,6 +242,22 @@ export function BankaOdemeView() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Excel Sütun Seçici */}
+      <ExcelSutunSeciciModal
+        acik={excelModalAcik}
+        onKapat={() => setExcelModalAcik(false)}
+        baslik="Banka Ödeme — Excel'e Aktar"
+        tumSutunlar={BANKA_TUM_SUTUNLAR}
+        sutunSetleri={BANKA_SUTUN_SETLERI}
+        onExport={(sutunlar) =>
+          bankaOdemeExport(satirListesi, {
+            sutunlar: sutunlar as never,
+            yil: seciliDonemYil,
+            ay: seciliDonemAy,
+          })
+        }
+      />
     </div>
   );
 }
