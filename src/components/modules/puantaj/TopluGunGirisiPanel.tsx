@@ -50,6 +50,10 @@ interface Props {
   gunler: GunBilgi[];
   ayKapali: boolean;
   onKapat: () => void;
+  /** Opsiyonel: tanımlanırsa iç mutation yerine bu çağrılır (proje puantaj için) */
+  onUygula?: (
+    kayitlar: { personelId: string; tarih: string; veri: PuantajGunVerisi }[]
+  ) => Promise<{ hata?: string; eklenenSayisi?: number; atlananSayisi?: number }>;
 }
 
 // ─────────────────────────────────────────────
@@ -62,6 +66,7 @@ export function TopluGunGirisiPanel({
   gunler,
   ayKapali,
   onKapat,
+  onUygula,
 }: Props) {
   // Seçimler
   const [seciliPersoneller, setSeciliPersoneller] = useState<Set<string>>(new Set());
@@ -161,27 +166,27 @@ export function TopluGunGirisiPanel({
       }
     }
 
-    const sonuc = await mutation.mutateAsync(kayitlar);
+    // onUygula prop'u varsa onu kullan (proje puantaj), yoksa iç mutation
+    let sonuc: { hata?: string; eklenenSayisi?: number; atlananSayisi?: number };
+    if (onUygula) {
+      sonuc = await onUygula(kayitlar);
+    } else {
+      sonuc = await mutation.mutateAsync(kayitlar) as typeof sonuc;
+    }
 
     if (sonuc?.hata) {
       toast.error(sonuc.hata);
       return;
     }
 
-    const { eklenenSayisi = 0, atlananSayisi = 0 } = sonuc as {
-      eklenenSayisi?: number;
-      atlananSayisi?: number;
-    };
+    const { eklenenSayisi = 0, atlananSayisi = 0 } = sonuc;
 
     if (atlananSayisi > 0) {
-      toast.warning(
-        `${eklenenSayisi} kayıt eklendi, ${atlananSayisi} kilitli gün atlandı.`
-      );
+      toast.warning(`${eklenenSayisi} kayıt eklendi, ${atlananSayisi} kilitli gün atlandı.`);
     } else {
       toast.success(`${eklenenSayisi} kayıt başarıyla girildi.`);
     }
 
-    // Seçimleri sıfırla
     setSeciliPersoneller(new Set());
     setSeciliGunler(new Set());
   }

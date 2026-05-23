@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSirketStore } from "@/stores/sirketStore";
 import { QUERY_KEYS } from "@/lib/constants";
-import { ayPuantajGetir, gunVeriGir, gunVeriSil, ayKapat, ayAc, projePuantajGetir, projeSaatGir, projeSaatSil, projeleriGetir, donemAktifProjeleriGetir, projeEkle, projeGuncelle, projeArsivle, projeAktivasyonu, projeSil, projePuantajVeGenelGir, projePuantajVeGenelSil, ayOzetGetir, ayOzetKaydet, projeDonemLogListele, projeDonemLogEkle, projeDonemLogGuncelle, projeDonemLogSil, projeDetayGetir, topluGunGirisi, } from "@/app/actions/puantaj";
+import { ayPuantajGetir, gunVeriGir, gunVeriSil, ayKapat, ayAc, projePuantajGetir, projeSaatGir, projeSaatSil, projeleriGetir, donemAktifProjeleriGetir, projeEkle, projeGuncelle, projeArsivle, projeAktivasyonu, projeSil, projePuantajVeGenelGir, projePuantajVeGenelSil, ayOzetGetir, ayOzetKaydet, projeDonemLogListele, projeDonemLogEkle, projeDonemLogGuncelle, projeDonemLogSil, projeDetayGetir, topluGunGirisi, topluProjePuantajGirisi, } from "@/app/actions/puantaj";
 import type { PuantajGunVerisi, FaturaKodu } from "@/types";
 import type { Database } from "@/supabase/types";
 type Proje = Database["public"]["Tables"]["proje"]["Row"];
@@ -571,3 +571,34 @@ export function useTopluGunGirisi(yil: number, ay: number) {
     },
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROJE TOPLU GÜN GİRİŞİ
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function useTopluProjePuantajGirisi(
+  projeId: string | null,
+  yil: number,
+  ay: number
+) {
+  const queryClient = useQueryClient();
+  const sirketId = useSirketStore((s) => s.aktifSirketId);
+
+  return useMutation({
+    mutationFn: (
+      kayitlar: { personelId: string; tarih: string; veri: PuantajGunVerisi }[]
+    ) => topluProjePuantajGirisi(projeId!, kayitlar),
+    onSuccess: async () => {
+      if (!sirketId || !projeId) return;
+      await Promise.all([
+        queryClient.refetchQueries({
+          queryKey: QUERY_KEYS.PUANTAJ_PROJE(sirketId, projeId, yil, ay),
+        }),
+        queryClient.refetchQueries({
+          queryKey: QUERY_KEYS.PUANTAJ_GENEL(sirketId, yil, ay),
+        }),
+      ]);
+    },
+  });
+}
+

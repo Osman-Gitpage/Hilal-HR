@@ -29,6 +29,8 @@ import { paraFormat } from "@/lib/cari";
 import type { ParaBirimi } from "@/types";
 import { ExcelSutunSeciciModal } from "@/components/ui/ExcelSutunSeciciModal";
 import { gemiListesiExport, GEMI_TUM_SUTUNLAR, GEMI_SUTUN_SETLERI } from "@/lib/excel/cariExport";
+import { PdfOnizleButton } from "@/components/ui/PdfOnizleButton";
+import { cariPdfOnizle } from "@/lib/pdf/cariPdf";
 
 // ─────────────────────────────────────────────
 // KPI Kart
@@ -196,6 +198,13 @@ export function CariListesiView() {
           >
             Excel&apos;e Aktar
           </Button>
+          <PdfOnizleButton
+            id="btn-gemi-pdf"
+            baslik="Gemi / Cari Listesi"
+            dosyaAdi="Gemi_Listesi"
+            disabled={gemiLoading || filtrelenmis.length === 0}
+            onOlustur={() => cariPdfOnizle(filtrelenmis as never, new Date().getFullYear(), new Date().getMonth() + 1)}
+          />
         </div>
       </div>
 

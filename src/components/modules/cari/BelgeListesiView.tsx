@@ -19,6 +19,8 @@ import { paraFormat } from "@/lib/cari";
 import type { ParaBirimi } from "@/types";
 import { ExcelSutunSeciciModal } from "@/components/ui/ExcelSutunSeciciModal";
 import { belgeListesiExport, BELGE_TUM_SUTUNLAR, BELGE_SUTUN_SETLERI } from "@/lib/excel/cariExport";
+import { PdfOnizleButton } from "@/components/ui/PdfOnizleButton";
+import { belgePdfOnizle } from "@/lib/pdf/cariPdf";
 
 // ─────────────────────────────────────────────
 // KPI Kart
@@ -171,6 +173,13 @@ export function BelgeListesiView() {
           >
             Excel&apos;e Aktar
           </Button>
+          <PdfOnizleButton
+            id="btn-belge-pdf"
+            baslik="Belge Listesi"
+            dosyaAdi="Belge_Listesi"
+            disabled={belgeLoading || belgeler.length === 0}
+            onOlustur={() => belgePdfOnizle(belgeler as never, new Date().getFullYear(), new Date().getMonth() + 1)}
+          />
         </div>
       </div>
 

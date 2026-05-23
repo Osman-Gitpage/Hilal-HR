@@ -45,6 +45,8 @@ import { GunVeriGirisiModal } from "./GunVeriGirisiModal";
 import { TopluGunGirisiPanel } from "./TopluGunGirisiPanel";
 import { ExcelExportButton } from "@/components/ui/ExcelExportButton";
 import { puantajExport } from "@/lib/excel/puantajExport";
+import { PdfOnizleButton } from "@/components/ui/PdfOnizleButton";
+import { puantajPdfOnizle } from "@/lib/pdf/puantajPdf";
 
 // ─────────────────────────────────────────────
 // Sabitler
@@ -494,6 +496,22 @@ export function GenelPuantajView() {
                   personeller,
                   puantajlar: data?.puantajlar ?? [],
                   ozetler,
+                  yil,
+                  ay,
+                })
+              }
+            />
+          )}
+          {/* PDF Önizle */}
+          {!isLoading && personeller.length > 0 && (
+            <PdfOnizleButton
+              id="btn-puantaj-pdf"
+              baslik={`${AY_ADLARI[ay]} ${yil} Puantaj Tablosu`}
+              dosyaAdi={`Puantaj_${yil}_${String(ay).padStart(2, '0')}`}
+              onOlustur={() =>
+                puantajPdfOnizle({
+                  personeller,
+                  puantajlar: data?.puantajlar ?? [],
                   yil,
                   ay,
                 })

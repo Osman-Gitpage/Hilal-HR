@@ -31,6 +31,8 @@ import { formatTarih, formatPara, formatAdSoyad } from "@/lib/utils/index";
 import { HizliPersonelEkleDialog } from "./HizliPersonelEkleDialog";
 import { ExcelSutunSeciciModal } from "@/components/ui/ExcelSutunSeciciModal";
 import { personelListesiExport, PERSONEL_TUM_SUTUNLAR, PERSONEL_SUTUN_SETLERI } from "@/lib/excel/personelExport";
+import { PdfOnizleButton } from "@/components/ui/PdfOnizleButton";
+import { personelPdfOnizle } from "@/lib/pdf/personelPdf";
 
 // ─────────────────────────────────────────────
 // KPI Kartları
@@ -228,6 +230,13 @@ export function PersonelListesiView() {
           >
             Excel&#39;e Aktar
           </Button>
+          <PdfOnizleButton
+            id="btn-personel-pdf"
+            baslik="Personel Listesi"
+            dosyaAdi={`Personel_Liste`}
+            disabled={isLoading || filtrelenmis.length === 0}
+            onOlustur={() => personelPdfOnizle(filtrelenmis as never, new Date().getFullYear(), new Date().getMonth() + 1)}
+          />
         </div>
       </div>
 

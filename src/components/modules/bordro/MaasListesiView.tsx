@@ -29,6 +29,8 @@ import { VARSAYILAN_AYLIK_CALISMA_SAATI, AY_ADLARI } from "@/lib/constants";
 import { DonemSecici } from "@/components/modules/bordro/DonemSecici";
 import { ExcelSutunSeciciModal } from "@/components/ui/ExcelSutunSeciciModal";
 import { bordroListesiExport, BORDRO_TUM_SUTUNLAR, BORDRO_SUTUN_SETLERI } from "@/lib/excel/bordroExport";
+import { PdfOnizleButton } from "@/components/ui/PdfOnizleButton";
+import { bordroPdfOnizle } from "@/lib/pdf/bordroPdf";
 
 // ─────────────────────────────────────────────
 // Durum Badge
@@ -168,16 +170,25 @@ export function MaasListesiView() {
       {/* Üst bar */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <DonemSecici />
-        <Button
-          id="btn-bordro-excel"
-          variant="outline"
-          size="sm"
-          onClick={() => setExcelModalAcik(true)}
-          disabled={isLoading || bordro_listesi.length === 0}
-          className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-700"
-        >
-          Excel&apos;e Aktar
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            id="btn-bordro-excel"
+            variant="outline"
+            size="sm"
+            onClick={() => setExcelModalAcik(true)}
+            disabled={isLoading || bordro_listesi.length === 0}
+            className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-700"
+          >
+            Excel&apos;e Aktar
+          </Button>
+          <PdfOnizleButton
+            id="btn-bordro-pdf"
+            baslik={`${AY_ADLARI[seciliDonemAy]} ${seciliDonemYil} Bordro Listesi`}
+            dosyaAdi={`Bordro_${seciliDonemYil}_${String(seciliDonemAy).padStart(2, '0')}`}
+            disabled={isLoading || bordro_listesi.length === 0}
+            onOlustur={() => bordroPdfOnizle(bordro_listesi as never, seciliDonemYil, seciliDonemAy)}
+          />
+        </div>
       </div>
 
       {/* KPI */}

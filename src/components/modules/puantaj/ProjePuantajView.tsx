@@ -42,9 +42,11 @@ import { OZEL_DURUMLAR } from "@/lib/constants";
 import type { Proje } from "@/supabase/app-types";
 import type { OzelDurum } from "@/types";
 import { GunVeriGirisiModal } from "./GunVeriGirisiModal";
+import { TopluGunGirisiPanel } from "./TopluGunGirisiPanel";
 import Link from "next/link";
 import { ExcelExportButton } from "@/components/ui/ExcelExportButton";
 import { projePuantajExport } from "@/lib/excel/puantajExport";
+import { useTopluProjePuantajGirisi } from "@/hooks/usePuantaj";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sabitler
@@ -217,8 +219,10 @@ export function ProjePuantajView() {
   // Proje + Genel çift yazma mutation'ları
   const veriGirMutation = useProjePuantajVeGenelGir(seciliProjeId, yil, ay);
   const veriSilMutation = useProjePuantajVeGenelSil(seciliProjeId, yil, ay);
+  const topluGirisMutation = useTopluProjePuantajGirisi(seciliProjeId, yil, ay);
 
-  // Modal durumu — Genel Puantaj ile aynı tip
+  // Modal + toplu giriş paneli durumu
+  const [topluGirisAcik, setTopluGirisAcik] = useState(false);
   const [secilenHucre, setSecilenHucre] = useState<{
     personelId: string;
     personelAd: string;
@@ -329,9 +333,39 @@ export function ProjePuantajView() {
             }
           />
         )}
+
+        {/* Toplu Giriş Toggle */}
+        {seciliProjeId && !isLoading && (
+          <Button
+            id="btn-proje-toplu-giris"
+            variant={topluGirisAcik ? "default" : "outline"}
+            size="sm"
+            onClick={() => setTopluGirisAcik((p) => !p)}
+            className="gap-1.5"
+          >
+            Toplu Giriş
+          </Button>
+        )}
       </div>
 
-      {/* Grid Tablosu */}
+      {/* Toplu Giriş Paneli */}
+      {topluGirisAcik && seciliProjeId && (
+        <TopluGunGirisiPanel
+          yil={yil}
+          ay={ay}
+          personeller={personeller}
+          gunler={gunler}
+          ayKapali={false}
+          onKapat={() => setTopluGirisAcik(false)}
+          onUygula={(kayitlar) =>
+            topluGirisMutation.mutateAsync(kayitlar) as Promise<{
+              hata?: string;
+              eklenenSayisi?: number;
+              atlananSayisi?: number;
+            }>
+          }
+        />
+      )}
       {seciliProjeId && (
         <div className="rounded-xl border bg-card overflow-x-auto">
           <Table className="text-xs">

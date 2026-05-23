@@ -1056,3 +1056,123 @@ export async function ayOzetKaydet(
   revalidatePath("/puantaj");
   return { basarili: true };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROJE TOPLU GÜN GİRİŞİ
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Toplu proje gün girişi — birden fazla personel × gün kombinasyonu için
+ * hem puantaj_proje hem puantaj_genel'e yazar.
+ * projePuantajVeGenelGir'in batch versiyonu.
+ */
+export async function topluProjePuantajGirisi(
+  projeId: string,
+  kayitlar: { personelId: string; tarih: string; veri: PuantajGunVerisi }[]
+) {
+  const { supabase, sirketId } = await getAuthContext();
+
+  if (!kayitlar.length) return { basarili: true, eklenenSayisi: 0, atlananSayisi: 0 };
+
+  // Kilitli günleri kontrol et
+  const tarihler = [...new Set(kayitlar.map((k) => k.tarih))];
+  const { data: kapalilar } = await supabase
+    .from("puantaj_genel")
+    .select("tarih")
+    .eq("sirket_id", sirketId)
+    .eq("kapali", true)
+    .in("tarih", tarihler);
+
+  const kapaliTarihSet = new Set((kapalilar ?? []).map((k: any) => k.tarih as string));
+  const aktifKayitlar = kayitlar.filter((k) => !kapaliTarihSet.has(k.tarih));
+
+  if (!aktifKayitlar.length) {
+    return { hata: "Seçilen tüm günler kilitli. Giriş yapılamadı." };
+  }
+
+  let hataSayisi = 0;
+
+  for (const k of aktifKayitlar) {
+    // Çalışma saatini hesapla
+    let calisma_saati: number | null = k.veri.calisma_saati ?? null;
+    if (k.veri.giris_saati && k.veri.cikis_saati && !calisma_saati) {
+      const [gh, gm] = k.veri.giris_saati.split(":").map(Number);
+      const [ch, cm] = k.veri.cikis_saati.split(":").map(Number);
+      const dakika = ch * 60 + cm - (gh * 60 + gm);
+      calisma_saati = dakika > 0 ? Math.round((dakika / 60) * 100) / 100 : null;
+    }
+
+    const projeSaat = k.veri.ozel_durum ? null : calisma_saati;
+    const projeMesai =
+      k.veri.ozel_durum === "PM"
+        ? (k.veri.mesai_saati ?? null)
+        : k.veri.ozel_durum
+          ? null
+          : (k.veri.mesai_saati ?? null);
+
+    // puantaj_proje: önce sil, sonra ekle
+    await supabase
+      .from("puantaj_proje")
+      .delete()
+      .eq("sirket_id", sirketId)
+      .eq("personel_id", k.personelId)
+      .eq("proje_id", projeId)
+      .eq("tarih", k.tarih);
+
+    const { error: projeErr } = await supabase.from("puantaj_proje").insert({
+      sirket_id: sirketId,
+      personel_id: k.personelId,
+      proje_id: projeId,
+      tarih: k.tarih,
+      saat: projeSaat,
+      mesai_saati: projeMesai,
+      ozel_durum: (k.veri.ozel_durum as OzelDurum) ?? null,
+      aciklama: k.veri.aciklama ?? null,
+    } as any);
+
+    if (projeErr) { hataSayisi++; continue; }
+
+    // Günlük toplam proje saatini hesapla (bu günde tüm projeler)
+    const { data: gunlukProjeSaatleri } = await supabase
+      .from("puantaj_proje")
+      .select("saat, mesai_saati")
+      .eq("sirket_id", sirketId)
+      .eq("personel_id", k.personelId)
+      .eq("tarih", k.tarih);
+
+    const toplamProjeSaati = k.veri.ozel_durum
+      ? null
+      : (gunlukProjeSaatleri ?? []).reduce((sum: number, row: any) => sum + (row.saat ?? 0), 0) || null;
+
+    const toplamMesaiSaati =
+      k.veri.ozel_durum && k.veri.ozel_durum !== "PM"
+        ? null
+        : ((gunlukProjeSaatleri ?? []).reduce((sum: number, row: any) => sum + (row.mesai_saati ?? 0), 0) || null);
+
+    // puantaj_genel'e upsert
+    await supabase.from("puantaj_genel").upsert(
+      {
+        sirket_id: sirketId,
+        personel_id: k.personelId,
+        tarih: k.tarih,
+        giris_saati: k.veri.ozel_durum ? null : (k.veri.giris_saati ?? null),
+        cikis_saati: k.veri.ozel_durum ? null : (k.veri.cikis_saati ?? null),
+        calisma_saati: k.veri.ozel_durum ? null : toplamProjeSaati,
+        ozel_durum: (k.veri.ozel_durum as OzelDurum) ?? null,
+        aciklama: k.veri.aciklama ?? null,
+        kapali: false,
+        mesai_saati: (k.veri.ozel_durum && k.veri.ozel_durum !== "PM") ? null : toplamMesaiSaati,
+      } as any,
+      { onConflict: "personel_id,tarih" }
+    );
+  }
+
+  revalidatePath("/puantaj");
+  revalidatePath("/puantaj/proje");
+  return {
+    basarili: true,
+    eklenenSayisi: aktifKayitlar.length - hataSayisi,
+    atlananSayisi: kayitlar.length - aktifKayitlar.length + hataSayisi,
+  };
+}
+
