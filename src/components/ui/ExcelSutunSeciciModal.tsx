@@ -118,7 +118,7 @@ export function ExcelSutunSeciciModal<T>({
 
   return (
     <Dialog open={acik} onOpenChange={onKapat}>
-      <DialogContent className="sm:max-w-md" id="dialog-excel-sutun-secici">
+      <DialogContent className="sm:max-w-md overflow-hidden max-w-[calc(100vw-2rem)]" id="dialog-excel-sutun-secici">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
@@ -154,32 +154,34 @@ export function ExcelSutunSeciciModal<T>({
 
         {/* Hazır set seçimi */}
         {mod === "set" && (
-          <div className="space-y-2">
+          <div className="space-y-2 w-full min-w-0 overflow-hidden flex flex-col">
             <p className="text-xs text-muted-foreground">Bir sütun seti seçin:</p>
-            <div className="space-y-2">
+            <div className="space-y-2 w-full min-w-0 overflow-hidden flex flex-col">
               {sutunSetleri.map((set) => {
                 const secili = seciliSetId === set.id;
                 return (
                   <button
                     key={set.id}
                     onClick={() => setSeciliSetId(set.id)}
-                    className={`w-full text-left rounded-lg border px-3 py-2.5 transition-colors ${
+                    className={`w-full text-left rounded-lg border px-3 py-2.5 transition-colors overflow-hidden max-w-full ${
                       secili
                         ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30"
                         : "border-border hover:bg-muted/50"
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className={`font-medium text-sm ${secili ? "text-emerald-700 dark:text-emerald-400" : ""}`}>
-                        {set.etiket}
-                      </span>
-                      <Badge variant="secondary" className="text-xs">
-                        {set.sutunlar.length} sütun
-                      </Badge>
+                    <div className="w-full overflow-hidden text-left min-w-0 flex flex-col">
+                      <div className="flex items-center justify-between w-full">
+                        <span className={`font-medium text-sm ${secili ? "text-emerald-700 dark:text-emerald-400" : ""}`}>
+                          {set.etiket}
+                        </span>
+                        <Badge variant="secondary" className="text-xs">
+                          {set.sutunlar.length} sütun
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 whitespace-normal break-words w-full block">
+                        {set.sutunlar.map((s) => s.baslik).join(", ")}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                      {set.sutunlar.map((s) => s.baslik).join(", ")}
-                    </p>
                   </button>
                 );
               })}
@@ -189,7 +191,7 @@ export function ExcelSutunSeciciModal<T>({
 
         {/* Özel sütun seçimi */}
         {mod === "ozel" && (
-          <div className="space-y-2">
+          <div className="space-y-2 w-full min-w-0 overflow-hidden flex flex-col">
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">
                 {ozelSeciliSayi} / {tumSutunlar.length} sütun seçili

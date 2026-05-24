@@ -1,6 +1,6 @@
 /**
- * src/lib/pdf/bordroPdf.ts
- * Ücret Bordrosu PDF export - Landscape A4 premium tasarımı.
+ * src/lib/pdf/yillikBordroPdf.ts
+ * Personel Yıllık Bordro PDF export - Landscape A4 premium tasarımı.
  */
 
 import jsPDF from "jspdf";
@@ -9,42 +9,14 @@ import { yeniDoc, pdfBlobUrl, pdfIndir, temizSirketAdi } from "./pdfUtils";
 import { createClient } from "@/supabase/client";
 import { VARSAYILAN_AYLIK_CALISMA_SAATI } from "@/lib/constants";
 
-export interface BordroSatir {
-  id: string;
-  personel: {
-    id: string;
-    ad: string;
-    soyad: string;
-    gorev_unvan: string | null;
-  };
-  maas_net?: number | string | null;
-  calisma_saati?: number | string | null;
-  mesai_saati?: number | string | null;
-  yol?: number | string | null;
-  yemek?: number | string | null;
-  prim?: number | string | null;
-  tazminat?: number | string | null;
-  senelik_izin?: number | string | null;
-  banka?: number | string | null;
-  bes?: number | string | null;
-  avans?: number | string | null;
-  icra?: number | string | null;
-  toplam_odeme?: number | string | null;
-  toplam_kesinti?: number | string | null;
-  iceri_avans_devir?: number | string | null;
-  iceri_avans_verilen?: number | string | null;
-  iceri_avans_kesinti?: number | string | null;
-  [key: string]: any;
-}
-
 function fmt(val: number | null | undefined): string {
   if (val == null || isNaN(val)) return "0,00";
   return val.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-async function _olustur(satirlar: BordroSatir[], yil: number, ay: number): Promise<jsPDF> {
+async function _olustur(personelId: string, yil: number): Promise<jsPDF> {
   const supabase = createClient();
-  
+
   // Fetch settings for aylik_calisma_saati
   const { data: ayarlar } = await supabase
     .from("ayarlar")
@@ -60,8 +32,29 @@ async function _olustur(satirlar: BordroSatir[], yil: number, ay: number): Promi
     .maybeSingle();
   const sirketAdi = temizSirketAdi(aktifSirket?.ad || "HİLAL İZOLASYON");
 
+  // Fetch the personnel details
+  const { data: personel } = await supabase
+    .from("personel")
+    .select("ad, soyad, tc, gorev_unvan")
+    .eq("id", personelId)
+    .maybeSingle();
+
+  const personelAdSoyad = personel 
+    ? `${personel.ad} ${personel.soyad}`.toUpperCase()
+    : "PERSONEL";
+
+  // Fetch all active version bordro records for the personnel in the selected year
+  const { data: bordrolar = [] } = await supabase
+    .from("maas_bordro")
+    .select("*")
+    .eq("personel_id", personelId)
+    .eq("donem_yil", yil)
+    .eq("is_active_version", true)
+    .order("donem_ay", { ascending: true });
+
+  const bordroIds = (bordrolar || []).map(b => b.id).filter(Boolean);
+
   // Fetch ek kalemler for these bordros to calculate digerPlus and digerMinus
-  const bordroIds = satirlar.map(b => b.id).filter(Boolean);
   const { data: ekKalemler } = bordroIds.length > 0
     ? await supabase.from("bordro_ek_kalem").select("bordro_id, tip, tutar").in("bordro_id", bordroIds)
     : { data: [] };
@@ -80,12 +73,6 @@ async function _olustur(satirlar: BordroSatir[], yil: number, ay: number): Promi
     "", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
     "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
   ];
-  const donemMetni = `${AY_ADLARI[ay]} ${yil}`;
-
-  const isTekPersonel = satirlar.length === 1;
-  const tekPersonelAdSoyad = isTekPersonel 
-    ? `${satirlar[0].personel?.ad} ${satirlar[0].personel?.soyad}`.toUpperCase()
-    : "";
 
   const doc = await yeniDoc("landscape");
   (doc as any).isCustomFooter = true;
@@ -113,7 +100,35 @@ async function _olustur(satirlar: BordroSatir[], yil: number, ay: number): Promi
     yeniDevir: 0,
   };
 
-  const rows = satirlar.map((b, i) => {
+  // Compile month-by-month matrix
+  const rows = [];
+  for (let m = 1; m <= 12; m++) {
+    const b = (bordrolar || []).find(x => x.donem_ay === m);
+    if (!b) {
+      rows.push({
+        ay: AY_ADLARI[m],
+        maas: "-",
+        calismaSaati: "-",
+        hakedis: "-",
+        mesaiSaati: "-",
+        mesaiBedeli: "-",
+        yol: "-",
+        yemek: "-",
+        prim: "-",
+        digerPlus: "-",
+        toplamOdeme: "-",
+        banka: "-",
+        bes: "-",
+        avans: "-",
+        digerMinus: "-",
+        toplamKesinti: "-",
+        elden: "-",
+        eskiDevir: "-",
+        yeniDevir: "-",
+      });
+      continue;
+    }
+
     const _maasNet = Number(b.maas_net ?? 0);
     const _calismaSaati = Number(b.calisma_saati ?? 0);
     const _mesaiSaati = Number(b.mesai_saati ?? 0);
@@ -150,9 +165,8 @@ async function _olustur(satirlar: BordroSatir[], yil: number, ay: number): Promi
     totals.eskiDevir += eskiDevir;
     totals.yeniDevir += yeniDevir;
 
-    return {
-      no: i + 1,
-      adSoyad: `${b.personel?.ad} ${b.personel?.soyad}`,
+    rows.push({
+      ay: AY_ADLARI[m],
       maas: fmt(_maasNet),
       calismaSaati: _calismaSaati,
       hakedis: fmt(hakedis),
@@ -171,13 +185,12 @@ async function _olustur(satirlar: BordroSatir[], yil: number, ay: number): Promi
       elden: fmt(elden),
       eskiDevir: fmt(eskiDevir),
       yeniDevir: fmt(yeniDevir),
-    };
-  });
+    });
+  }
 
-  // Push the totals row to the body
+  // Push Totals Row
   rows.push({
-    no: "" as any,
-    adSoyad: "TOPLAMLAR................" as any,
+    ay: "TOPLAMLAR",
     maas: "" as any,
     calismaSaati: totals.calismaSaati as any,
     hakedis: fmt(totals.hakedis) as any,
@@ -198,34 +211,31 @@ async function _olustur(satirlar: BordroSatir[], yil: number, ay: number): Promi
     yeniDevir: fmt(totals.yeniDevir) as any,
   });
 
-  // Column widths definition to match available 277mm precisely
   const columnStyles: Record<string, any> = {
-    no: { cellWidth: 6, textColor: [100, 116, 139] },
-    adSoyad: { halign: "left", cellWidth: 30, fontStyle: "bold", textColor: [15, 23, 42] },
-    maas: { halign: "right", cellWidth: 15 },
+    ay: { halign: "left", cellWidth: 20, fontStyle: "bold", textColor: [15, 23, 42] },
+    maas: { halign: "right", cellWidth: 16 },
     calismaSaati: { halign: "center", cellWidth: 12 },
-    hakedis: { halign: "right", cellWidth: 15 },
+    hakedis: { halign: "right", cellWidth: 16 },
     mesaiSaati: { halign: "center", cellWidth: 12 },
-    mesaiBedeli: { halign: "right", cellWidth: 15 },
+    mesaiBedeli: { halign: "right", cellWidth: 16 },
     yol: { halign: "right", cellWidth: 12 },
     yemek: { halign: "right", cellWidth: 12 },
     prim: { halign: "right", cellWidth: 12 },
     digerPlus: { halign: "right", cellWidth: 12 },
-    toplamOdeme: { halign: "right", cellWidth: 16.5 },
-    banka: { halign: "right", cellWidth: 16.5 },
+    toplamOdeme: { halign: "right", cellWidth: 18 },
+    banka: { halign: "right", cellWidth: 18 },
     bes: { halign: "right", cellWidth: 12 },
     avans: { halign: "right", cellWidth: 12 },
     digerMinus: { halign: "right", cellWidth: 12 },
-    toplamKesinti: { halign: "right", cellWidth: 16.5 },
-    elden: { halign: "right", cellWidth: 16.5 },
-    eskiDevir: { halign: "right", cellWidth: 13 },
-    yeniDevir: { halign: "right", cellWidth: 13 },
+    toplamKesinti: { halign: "right", cellWidth: 18 },
+    elden: { halign: "right", cellWidth: 19 },
+    eskiDevir: { halign: "right", cellWidth: 15 },
+    yeniDevir: { halign: "right", cellWidth: 15 },
   };
 
   autoTable(doc, {
     columns: [
-      { header: "NO", dataKey: "no" },
-      { header: "AD SOYAD", dataKey: "adSoyad" },
+      { header: "AY", dataKey: "ay" },
       { header: "MAAŞ", dataKey: "maas" },
       { header: "Ç.SAATİ", dataKey: "calismaSaati" },
       { header: "HAK EDİŞ", dataKey: "hakedis" },
@@ -250,46 +260,41 @@ async function _olustur(satirlar: BordroSatir[], yil: number, ay: number): Promi
     margin: { left: 10, right: 10 },
     styles: {
       font: "Roboto",
-      fontSize: 7.6, // Scaled up to 7.6 to make it much larger and match the mockup
-      cellPadding: { top: 1.4, bottom: 1.4, left: 0.5, right: 0.5 }, // Tall padding with tight horizontal spacing
+      fontSize: 7.4,
+      cellPadding: { top: 1.4, bottom: 1.4, left: 0.5, right: 0.5 },
       halign: "center",
       valign: "middle",
       lineWidth: { top: 0, bottom: 0.1, left: 0, right: 0 },
-      lineColor: [226, 232, 240], // #e2e8f0 ince çizgiler
-      textColor: [0, 0, 0], // Pure black for high contrast
-      fillColor: [255, 255, 255], // All rows white
+      lineColor: [226, 232, 240],
+      textColor: [0, 0, 0],
+      fillColor: [255, 255, 255],
     },
     headStyles: {
       font: "Roboto",
       fontStyle: "bold",
-      fillColor: [255, 255, 255], // White background header
-      textColor: [0, 0, 0], // Black text
-      fontSize: 7.6, // Scaled up to 7.6 to match the body
+      fillColor: [255, 255, 255],
+      textColor: [0, 0, 0],
+      fontSize: 7.4,
       cellPadding: { top: 1.8, bottom: 1.8, left: 0.5, right: 0.5 },
       lineWidth: { top: 0.8, bottom: 0.8, left: 0, right: 0 },
-      lineColor: [0, 0, 0], // Thick black line top/bottom of header
+      lineColor: [0, 0, 0],
     },
     columnStyles,
     didParseCell: (data) => {
       const colId = data.column.dataKey as string;
 
-      // Make body cells bold for adSoyad, toplamOdeme, and elden
       if (data.section === "body") {
-        data.cell.styles.textColor = [0, 0, 0]; // Ensure all text in body is high-contrast black
-        
-        if (colId === "adSoyad") {
-          data.cell.styles.fontStyle = "bold";
-        }
+        data.cell.styles.textColor = [0, 0, 0];
       }
 
       if (colId === "toplamOdeme") {
-        data.cell.styles.textColor = [204, 119, 0]; // Amber #cc7700
+        data.cell.styles.textColor = [204, 119, 0];
         if (data.section === "body") {
           data.cell.styles.fontStyle = "bold";
         }
       }
       if (colId === "elden") {
-        data.cell.styles.textColor = [204, 0, 0]; // Red #cc0000
+        data.cell.styles.textColor = [204, 0, 0];
         if (data.section === "body") {
           data.cell.styles.fontStyle = "bold";
         }
@@ -309,7 +314,7 @@ async function _olustur(satirlar: BordroSatir[], yil: number, ay: number): Promi
     },
     willDrawCell: (data) => {
       if (data.section === "body" && data.row.index < rows.length - 1) {
-        doc.setDrawColor(107, 114, 128); // Grey #6b7280
+        doc.setDrawColor(107, 114, 128);
         doc.setLineWidth(0.2);
       }
     },
@@ -335,18 +340,12 @@ async function _olustur(satirlar: BordroSatir[], yil: number, ay: number): Promi
       doc.text(`Ünvan..............: ${sirketAdi}`, 10, 15);
 
       doc.setFont("Roboto", "bold");
-      doc.setFontSize(15);
-      const baslikMetni = isTekPersonel 
-        ? tekPersonelAdSoyad
-        : "ÜCRET BORDROSU";
-      doc.text(baslikMetni, w / 2, 14, { align: "center" });
+      doc.setFontSize(14);
+      doc.text(personelAdSoyad, w / 2, 14, { align: "center" });
 
       doc.setFont("Roboto", "bold");
       doc.setFontSize(11);
-      const altBaslikMetni = isTekPersonel
-        ? `${donemMetni} Ücret Bordrosu`
-        : donemMetni;
-      doc.text(altBaslikMetni, w / 2, 20, { align: "center" });
+      doc.text(`${yil} Yılı Personel Yıllık Bordrosu (1-12 Ay)`, w / 2, 20, { align: "center" });
 
       // Page stamp on the top right
       doc.setFont("Roboto", "normal");
@@ -367,18 +366,18 @@ async function _olustur(satirlar: BordroSatir[], yil: number, ay: number): Promi
     doc.setFont("Roboto", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(156, 163, 175);
-    doc.text("Hilal Muhasebe Yazılımı", 10, h - 6);
+    doc.text("Hilal Muhasebe Yazılımı — Yıllık Bordro Raporu", 10, h - 6);
   }
 
   return doc;
 }
 
-export async function bordroPdfOnizle(satirlar: BordroSatir[], yil: number, ay: number): Promise<string> {
-  const doc = await _olustur(satirlar, yil, ay);
+export async function yillikBordroPdfOnizle(personelId: string, yil: number): Promise<string> {
+  const doc = await _olustur(personelId, yil);
   return pdfBlobUrl(doc);
 }
 
-export async function bordroPdfIndir(satirlar: BordroSatir[], yil: number, ay: number): Promise<void> {
-  const doc = await _olustur(satirlar, yil, ay);
-  pdfIndir(doc, `Bordro_${yil}_${String(ay).padStart(2, "0")}`);
+export async function yillikBordroPdfIndir(personelId: string, yil: number): Promise<void> {
+  const doc = await _olustur(personelId, yil);
+  pdfIndir(doc, `Yillik_Bordro_${personelId}_${yil}`);
 }

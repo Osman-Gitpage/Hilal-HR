@@ -45,8 +45,10 @@ import { GunVeriGirisiModal } from "./GunVeriGirisiModal";
 import { TopluGunGirisiPanel } from "./TopluGunGirisiPanel";
 import Link from "next/link";
 import { ExcelExportButton } from "@/components/ui/ExcelExportButton";
-import { projePuantajExport } from "@/lib/excel/puantajExport";
 import { useTopluProjePuantajGirisi } from "@/hooks/usePuantaj";
+import { PdfOnizleButton } from "@/components/ui/PdfOnizleButton";
+import { projePuantajPdfOnizle } from "@/lib/pdf/puantajPdf";
+import { projePuantajExport } from "@/lib/excel/puantajExport";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sabitler
@@ -260,6 +262,14 @@ export function ProjePuantajView() {
     );
   }
 
+  // Toplam mesai hesabı
+  function hesaplaToplamMesai(personelId: string): number {
+    return Array.from(veriMap.get(personelId)?.values() ?? []).reduce(
+      (s, v) => s + (v.mesai_saati ?? 0),
+      0
+    );
+  }
+
   const isLoading = projelerYukleniyor || puantajYukleniyor || personelYukleniyor;
 
   // ── Proje yok durumu ──────────────────────────────────────────────────────
@@ -324,6 +334,24 @@ export function ProjePuantajView() {
             label="Excel'e Aktar"
             onExport={() =>
               projePuantajExport({
+                personeller,
+                satirlar: satirlar as never,
+                projeAdi: seciliProje.ad,
+                yil,
+                ay,
+              })
+            }
+          />
+        )}
+
+        {/* PDF Önizle */}
+        {seciliProje && !isLoading && personeller.length > 0 && (
+          <PdfOnizleButton
+            id="btn-proje-puantaj-pdf"
+            baslik={`${AY_ADLARI[ay]} ${yil} Proje Puantaj Tablosu`}
+            dosyaAdi={`Proje_Puantaj_${seciliProje.ad.replace(/\s+/g, '_')}_${yil}_${String(ay).padStart(2, '0')}`}
+            onOlustur={() =>
+              projePuantajPdfOnizle({
                 personeller,
                 satirlar: satirlar as never,
                 projeAdi: seciliProje.ad,
@@ -412,8 +440,11 @@ export function ProjePuantajView() {
                     </TableHead>
                   ))}
 
-                <TableHead className="min-w-[60px] text-center bg-muted/60 border-l font-semibold">
-                  Toplam (s)
+                <TableHead className="min-w-[56px] text-center bg-muted/60 border-l font-semibold">
+                  Toplam
+                </TableHead>
+                <TableHead className="min-w-[56px] text-center bg-muted/60 font-semibold text-amber-700 dark:text-amber-400">
+                  Mesai
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -435,7 +466,7 @@ export function ProjePuantajView() {
               ) : personeller.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={gunler.length + 2}
+                    colSpan={gunler.length + 3}
                     className="text-center py-12 text-muted-foreground"
                   >
                     Bu dönemde aktif personel bulunmuyor.
@@ -444,6 +475,7 @@ export function ProjePuantajView() {
               ) : (
                 personeller.map((p) => {
                   const toplam = hesaplaToplam(p.id);
+                  const toplamMesai = hesaplaToplamMesai(p.id);
                   return (
                     <TableRow
                       key={p.id}
@@ -505,8 +537,12 @@ export function ProjePuantajView() {
                       })}
 
                       {/* Toplam */}
-                      <TableCell className="text-center font-bold bg-muted/30 border-l text-primary tabular-nums">
+                      <TableCell className="text-center font-semibold bg-muted/30 border-l text-primary tabular-nums">
                         {toplam > 0 ? toplam : "—"}
+                      </TableCell>
+                      {/* Mesai */}
+                      <TableCell className="text-center font-semibold bg-muted/30 text-amber-700 dark:text-amber-400 tabular-nums">
+                        {toplamMesai > 0 ? toplamMesai : "—"}
                       </TableCell>
                     </TableRow>
                   );

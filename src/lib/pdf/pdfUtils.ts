@@ -15,6 +15,42 @@ export function excelDonemPdf(yil: number, ay: number) {
   return `${AY_ADLARI_PDF[ay]} ${yil}`;
 }
 
+export function temizSirketAdi(ad: string): string {
+  if (!ad) return "";
+  const keywords = [
+    "GEMİ", "GEMI",
+    "İNŞ", "INS",
+    "TURİZM", "TURIZM",
+    "GIDA",
+    "SAN",
+    "TİC", "TIC",
+    "LTD",
+    "A.Ş.", "A.S.",
+    "ŞTİ", "STI"
+  ];
+  
+  const words = ad.split(/\s+/);
+  const cleanWords: string[] = [];
+  
+  for (const word of words) {
+    const upperWord = word.toUpperCase()
+      .replace(/I/g, "İ")
+      .replace(/ı/g, "I");
+    
+    const shouldStop = keywords.some(kw => {
+      return upperWord.startsWith(kw) || upperWord.includes(kw);
+    });
+    
+    if (shouldStop) {
+      break;
+    }
+    cleanWords.push(word);
+  }
+  
+  if (cleanWords.length === 0) return ad;
+  return cleanWords.join(" ").trim();
+}
+
 // ─────────────────────────────────────────────
 // Font Yükleme
 // ─────────────────────────────────────────────
@@ -82,6 +118,8 @@ export function baslikEkle(doc: jsPDF, baslik: string, donem: string): number {
 }
 
 export function footerEkle(doc: jsPDF): void {
+  if ((doc as any).isCustomFooter) return;
+
   const pageCount = (doc as unknown as { internal: { getNumberOfPages: () => number } })
     .internal.getNumberOfPages();
   const w = doc.internal.pageSize.getWidth();

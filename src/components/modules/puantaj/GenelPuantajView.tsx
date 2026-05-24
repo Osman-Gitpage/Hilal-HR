@@ -512,6 +512,7 @@ export function GenelPuantajView() {
                 puantajPdfOnizle({
                   personeller,
                   puantajlar: data?.puantajlar ?? [],
+                  ozetler,
                   yil,
                   ay,
                 })
@@ -602,7 +603,7 @@ export function GenelPuantajView() {
 
                 {/* Özet kolonları */}
                 <TableHead className="min-w-[52px] text-center bg-muted/60 border-l font-semibold">
-                  Çalış.
+                  Toplam
                 </TableHead>
                 <TableHead className="min-w-[52px] text-center bg-muted/60 font-semibold">
                   Mesai

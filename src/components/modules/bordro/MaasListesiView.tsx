@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import {
   Users, Banknote, TrendingDown, HandCoins,
   CheckCircle2, Lock, Clock, FileEdit, Loader2, RotateCcw,
-  ArrowUp, ArrowDown, ArrowUpDown,
+  ArrowUp, ArrowDown, ArrowUpDown, FileText,
 } from "lucide-react";
 import { nextSort, compareValues, type SortState } from "@/lib/utils/sort";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,9 @@ import { ExcelSutunSeciciModal } from "@/components/ui/ExcelSutunSeciciModal";
 import { bordroListesiExport, BORDRO_TUM_SUTUNLAR, BORDRO_SUTUN_SETLERI } from "@/lib/excel/bordroExport";
 import { PdfOnizleButton } from "@/components/ui/PdfOnizleButton";
 import { bordroPdfOnizle } from "@/lib/pdf/bordroPdf";
+import { pusulaPdfOnizle } from "@/lib/pdf/pusulaPdf";
+import { izinRaporPdfOnizle } from "@/lib/pdf/izinRaporPdf";
+import { PdfOnizlemeModal } from "@/components/ui/PdfOnizlemeModal";
 
 // ─────────────────────────────────────────────
 // Durum Badge
@@ -104,6 +107,31 @@ export function MaasListesiView() {
   const { data: ayarlar } = useAyarlar();
   const aylikCalisma = ayarlar?.aylik_calisma_saati ?? VARSAYILAN_AYLIK_CALISMA_SAATI;
   const invalidate = useInvalidateBordro();
+
+  // PDF Preview State
+  const [pdfOnizlemeAcik, setPdfOnizlemeAcik] = useState(false);
+  const [pdfYukleniyor, setPdfYukleniyor] = useState(false);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [pdfBaslik, setPdfBaslik] = useState("");
+  const [pdfDosyaAdi, setPdfDosyaAdi] = useState("");
+
+  async function pdfGoster(baslik: string, dosyaAdi: string, fn: () => Promise<string>) {
+    setPdfOnizlemeAcik(true);
+    setPdfYukleniyor(true);
+    setPdfBlobUrl(null);
+    setPdfBaslik(baslik);
+    setPdfDosyaAdi(dosyaAdi);
+    try {
+      const url = await fn();
+      setPdfBlobUrl(url);
+    } catch (err) {
+      console.error(err);
+      toast.error("PDF oluşturulurken hata oluştu.");
+      setPdfOnizlemeAcik(false);
+    } finally {
+      setPdfYukleniyor(false);
+    }
+  }
 
   const bordro_listesi = useMemo(() => {
     if (!sort.field) return bordro_listesi_raw;
@@ -181,13 +209,51 @@ export function MaasListesiView() {
           >
             Excel&apos;e Aktar
           </Button>
-          <PdfOnizleButton
-            id="btn-bordro-pdf"
-            baslik={`${AY_ADLARI[seciliDonemAy]} ${seciliDonemYil} Bordro Listesi`}
-            dosyaAdi={`Bordro_${seciliDonemYil}_${String(seciliDonemAy).padStart(2, '0')}`}
-            disabled={isLoading || bordro_listesi.length === 0}
-            onOlustur={() => bordroPdfOnizle(bordro_listesi as never, seciliDonemYil, seciliDonemAy)}
-          />
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              id="btn-pdf-raporlari"
+              className="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-md border border-rose-300 text-rose-700 bg-background hover:bg-rose-50 dark:text-rose-400 dark:border-rose-700 hover:text-rose-800 transition-colors text-sm font-medium cursor-pointer"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              PDF Raporları
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem
+                onClick={() =>
+                  pdfGoster(
+                    `${AY_ADLARI[seciliDonemAy]} ${seciliDonemYil} Ücret Bordrosu (Toplu)`,
+                    `Bordro_${seciliDonemYil}_${String(seciliDonemAy).padStart(2, "0")}`,
+                    () => bordroPdfOnizle(bordro_listesi as never, seciliDonemYil, seciliDonemAy)
+                  )
+                }
+              >
+                1. Ücret Bordrosu (Toplu)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  pdfGoster(
+                    `${AY_ADLARI[seciliDonemAy]} ${seciliDonemYil} Hesap Pusulası (Toplu)`,
+                    `Hesap_Pusulasi_${seciliDonemYil}_${String(seciliDonemAy).padStart(2, "0")}`,
+                    () => pusulaPdfOnizle(bordro_listesi as never, seciliDonemYil, seciliDonemAy)
+                  )
+                }
+              >
+                2. Hesap Pusulası (Toplu)
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() =>
+                  pdfGoster(
+                    `Yıllık İzin Raporu`,
+                    `Yillik_Izin_Raporu_${seciliDonemYil}`,
+                    () => izinRaporPdfOnizle()
+                  )
+                }
+              >
+                5. Yıllık İzin Raporu
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -406,6 +472,19 @@ export function MaasListesiView() {
           })
         }
       />
+
+      {pdfOnizlemeAcik && (
+        <PdfOnizlemeModal
+          blobUrl={pdfBlobUrl}
+          yukleniyor={pdfYukleniyor}
+          baslik={pdfBaslik}
+          dosyaAdi={pdfDosyaAdi}
+          onKapat={() => {
+            setPdfOnizlemeAcik(false);
+            setPdfBlobUrl(null);
+          }}
+        />
+      )}
     </div>
   );
 }

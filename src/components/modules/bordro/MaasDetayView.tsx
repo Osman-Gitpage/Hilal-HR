@@ -7,7 +7,7 @@ import {
   ArrowLeft, User, Banknote, TrendingDown, HandCoins,
   Building2, Clock, CheckCircle2, Lock, FileEdit,
   Phone, Mail, CreditCard, Briefcase,
-  Receipt, ChevronRight, RotateCcw, Loader2,
+  Receipt, ChevronRight, RotateCcw, Loader2, FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,15 @@ import { revizyonBaslat } from "@/app/actions/maas";
 import { formatPara, formatAdSoyad, formatDonem } from "@/lib/utils/index";
 import { VARSAYILAN_AYLIK_CALISMA_SAATI } from "@/lib/constants";
 import type { BordroNot } from "@/supabase/app-types";
+import { PdfOnizleButton } from "@/components/ui/PdfOnizleButton";
+import { bordroPdfOnizle } from "@/lib/pdf/bordroPdf";
+import { pusulaPdfOnizle } from "@/lib/pdf/pusulaPdf";
+import { yillikBordroPdfOnizle } from "@/lib/pdf/yillikBordroPdf";
+import { PdfOnizlemeModal } from "@/components/ui/PdfOnizlemeModal";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // ─── Yardımcılar ───────────────────────────────────────────────
 // T4.8: AY_ADLARI kaldırıldı → formatDonem kullanılıyor
@@ -275,6 +284,31 @@ export function MaasDetayView({ bordroId }: { bordroId: string }) {
   const [isPending, startTransition] = useTransition();
   const invalidate = useInvalidateBordro();
 
+  // PDF Preview State
+  const [pdfOnizlemeAcik, setPdfOnizlemeAcik] = useState(false);
+  const [pdfYukleniyor, setPdfYukleniyor] = useState(false);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [pdfBaslik, setPdfBaslik] = useState("");
+  const [pdfDosyaAdi, setPdfDosyaAdi] = useState("");
+
+  async function pdfGoster(baslik: string, dosyaAdi: string, fn: () => Promise<string>) {
+    setPdfOnizlemeAcik(true);
+    setPdfYukleniyor(true);
+    setPdfBlobUrl(null);
+    setPdfBaslik(baslik);
+    setPdfDosyaAdi(dosyaAdi);
+    try {
+      const url = await fn();
+      setPdfBlobUrl(url);
+    } catch (err) {
+      console.error(err);
+      toast.error("PDF oluşturulurken hata oluştu.");
+      setPdfOnizlemeAcik(false);
+    } finally {
+      setPdfYukleniyor(false);
+    }
+  }
+
   function handleRevizyonBaslat() {
     if (!revizyonNeden.trim()) {
       toast.error("Revizyon nedeni zorunludur.");
@@ -378,6 +412,51 @@ export function MaasDetayView({ bordroId }: { bordroId: string }) {
               Revizyon Başlat
             </Button>
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              id="btn-pdf-raporlari"
+              className="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-md border border-rose-300 text-rose-700 bg-background hover:bg-rose-50 dark:text-rose-400 dark:border-rose-700 hover:text-rose-800 transition-colors text-sm font-medium cursor-pointer"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              PDF Raporları
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem
+                onClick={() =>
+                  pdfGoster(
+                    `${formatAdSoyad(p.ad, p.soyad)} - ${donemAdi} Ücret Bordrosu`,
+                    `Bordro_${formatAdSoyad(p.ad, p.soyad).replace(/\s+/g, "_")}_${bordro.donem_yil}_${String(bordro.donem_ay).padStart(2, "0")}`,
+                    () => bordroPdfOnizle([bordro] as any, bordro.donem_yil, bordro.donem_ay)
+                  )
+                }
+              >
+                1. Ücret Bordrosu (Kişisel)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  pdfGoster(
+                    `${formatAdSoyad(p.ad, p.soyad)} - ${donemAdi} Hesap Pusulası`,
+                    `Hesap_Pusulasi_${formatAdSoyad(p.ad, p.soyad).replace(/\s+/g, "_")}_${bordro.donem_yil}_${String(bordro.donem_ay).padStart(2, "0")}`,
+                    () => pusulaPdfOnizle([bordro] as any, bordro.donem_yil, bordro.donem_ay)
+                  )
+                }
+              >
+                2. Hesap Pusulası (Kişisel)
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() =>
+                  pdfGoster(
+                    `${formatAdSoyad(p.ad, p.soyad)} - ${bordro.donem_yil} Yıllık Bordro`,
+                    `Yillik_Bordro_${formatAdSoyad(p.ad, p.soyad).replace(/\s+/g, "_")}_${bordro.donem_yil}`,
+                    () => yillikBordroPdfOnizle(bordro.personel_id, bordro.donem_yil)
+                  )
+                }
+              >
+                3. Yıllık Bordro (1-12 Ay)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="outline" size="sm" onClick={() => router.back()}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Geri
@@ -659,6 +738,19 @@ export function MaasDetayView({ bordroId }: { bordroId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {pdfOnizlemeAcik && (
+        <PdfOnizlemeModal
+          blobUrl={pdfBlobUrl}
+          yukleniyor={pdfYukleniyor}
+          baslik={pdfBaslik}
+          dosyaAdi={pdfDosyaAdi}
+          onKapat={() => {
+            setPdfOnizlemeAcik(false);
+            setPdfBlobUrl(null);
+          }}
+        />
+      )}
     </div>
   );
 }
