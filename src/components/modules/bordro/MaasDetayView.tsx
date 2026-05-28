@@ -372,7 +372,7 @@ export function MaasDetayView({ bordroId }: { bordroId: string }) {
   return (
     <div className="space-y-6">
       {/* ── Breadcrumb & Başlık ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           {/* Breadcrumb */}
           <nav className="flex items-center gap-1.5 text-sm text-muted-foreground mb-2">
@@ -398,7 +398,7 @@ export function MaasDetayView({ bordroId }: { bordroId: string }) {
         </div>
 
         {/* Aksiyon Butonları */}
-        <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
           {/* T5.2: Kilitlendi ise revizyon butonu */}
           {bordro.durum === "kilitlendi" && (
             <Button

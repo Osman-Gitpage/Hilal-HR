@@ -206,12 +206,12 @@ export function PersonelListesiView() {
   return (
     <div className="space-y-6">
       {/* Başlık */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Personel Yönetimi</h1>
           <p className="text-muted-foreground mt-1">Tüm çalışanları görüntüleyin ve yönetin.</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2">
           <Button id="btn-hizli-ekle" variant="outline" onClick={() => setPersonelEkleAcik(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Hızlı Ekle
@@ -248,7 +248,7 @@ export function PersonelListesiView() {
       </div>
 
       {/* Tablo */}
-      <div className="rounded-xl border bg-card">
+      <div className="rounded-xl border bg-card overflow-x-auto">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 border-b">
           <Tabs value={personelTab} onValueChange={(v) => setPersonelTab(v as "aktif" | "arsiv")}>
             <TabsList>

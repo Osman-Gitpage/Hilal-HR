@@ -445,10 +445,10 @@ export function GenelPuantajView() {
   return (
     <div className="space-y-4">
       {/* Üst Bar */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <DonemSecici ayKapali={ayKapali} />
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Toplu Giriş Toggle */}
           {!ayKapali && (
             <Button

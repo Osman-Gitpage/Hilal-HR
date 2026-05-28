@@ -16,6 +16,7 @@ interface UIStore {
 
   // Sidebar
   sidebarAcik: boolean;
+  mobileSidebarAcik: boolean;
 
   // Actions
   setPersonelEkleAcik: (acik: boolean) => void;
@@ -25,6 +26,8 @@ interface UIStore {
   setSeciliDonem: (yil: number, ay: number) => void;
   setSidebarAcik: (acik: boolean) => void;
   toggleSidebar: () => void;
+  setMobileSidebarAcik: (acik: boolean) => void;
+  toggleMobileSidebar: () => void;
 }
 
 const bugun = new Date();
@@ -41,6 +44,7 @@ export const useUIStore = create<UIStore>((set) => ({
   seciliDonemAy: bugun.getMonth() + 1,
 
   sidebarAcik: true,
+  mobileSidebarAcik: false,
 
   setPersonelEkleAcik: (acik) => set({ personelEkleAcik: acik }),
 
@@ -59,4 +63,8 @@ export const useUIStore = create<UIStore>((set) => ({
   setSidebarAcik: (acik) => set({ sidebarAcik: acik }),
 
   toggleSidebar: () => set((s) => ({ sidebarAcik: !s.sidebarAcik })),
+
+  setMobileSidebarAcik: (acik) => set({ mobileSidebarAcik: acik }),
+
+  toggleMobileSidebar: () => set((s) => ({ mobileSidebarAcik: !s.mobileSidebarAcik })),
 }));

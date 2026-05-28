@@ -494,7 +494,7 @@ export function PersonelDetayView({ personelId }: { personelId: string }) {
           </div>
 
           {/* Sağ: Aksiyonlar */}
-          <div className="flex gap-2 shrink-0">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -536,28 +536,30 @@ export function PersonelDetayView({ personelId }: { personelId: string }) {
 
       {/* Tabs */}
       <Tabs defaultValue="genel">
-        <TabsList className="w-full sm:w-auto">
-          <TabsTrigger value="genel" id="tab-genel" className="gap-1.5">
-            <User className="h-3.5 w-3.5" />
-            Genel Bilgiler
-          </TabsTrigger>
-          <TabsTrigger value="calisma" id="tab-calisma" className="gap-1.5">
-            <History className="h-3.5 w-3.5" />
-            Çalışma Geçmişi
-          </TabsTrigger>
-          <TabsTrigger value="maas" id="tab-maas" className="gap-1.5">
-            <DollarSign className="h-3.5 w-3.5" />
-            Maaş Geçmişi
-          </TabsTrigger>
-          <TabsTrigger value="puantaj" id="tab-puantaj" className="gap-1.5">
-            <ClipboardList className="h-3.5 w-3.5" />
-            Puantaj
-          </TabsTrigger>
-          <TabsTrigger value="evraklar" id="tab-evraklar" className="gap-1.5">
-            <FileText className="h-3.5 w-3.5" />
-            Evraklar
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto">
+          <TabsList className="w-max sm:w-auto min-w-full sm:min-w-0">
+            <TabsTrigger value="genel" id="tab-genel" className="gap-1.5">
+              <User className="h-3.5 w-3.5" />
+              Genel Bilgiler
+            </TabsTrigger>
+            <TabsTrigger value="calisma" id="tab-calisma" className="gap-1.5">
+              <History className="h-3.5 w-3.5" />
+              Çalışma Geçmişi
+            </TabsTrigger>
+            <TabsTrigger value="maas" id="tab-maas" className="gap-1.5">
+              <DollarSign className="h-3.5 w-3.5" />
+              Maaş Geçmişi
+            </TabsTrigger>
+            <TabsTrigger value="puantaj" id="tab-puantaj" className="gap-1.5">
+              <ClipboardList className="h-3.5 w-3.5" />
+              Puantaj
+            </TabsTrigger>
+            <TabsTrigger value="evraklar" id="tab-evraklar" className="gap-1.5">
+              <FileText className="h-3.5 w-3.5" />
+              Evraklar
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="genel" className="mt-4">
           <GenelBilgilerTab personel={personel} />

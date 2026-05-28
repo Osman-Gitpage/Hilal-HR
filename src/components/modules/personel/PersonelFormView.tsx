@@ -116,7 +116,7 @@ export function PersonelFormView({
         <div className="space-y-4">
           <BolumBasligi baslik="Kişisel Bilgiler" />
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="form-ad">Ad *</Label>
               <Input
@@ -154,7 +154,7 @@ export function PersonelFormView({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="form-dogum-tarihi">Doğum Tarihi</Label>
               <Input
@@ -186,7 +186,7 @@ export function PersonelFormView({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="form-sgk-sicil">SGK Sicil No</Label>
               <Input
@@ -209,7 +209,7 @@ export function PersonelFormView({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="form-telefon">Telefon</Label>
               <Input
@@ -249,7 +249,7 @@ export function PersonelFormView({
         <div className="space-y-4">
           <BolumBasligi baslik="İstihdam Bilgileri" />
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {mod === "yeni" && (
               <div className="space-y-1.5">
                 <Label htmlFor="form-ise-baslama">İşe Giriş Tarihi *</Label>
@@ -333,7 +333,7 @@ export function PersonelFormView({
               />
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="form-sube-kodu">Şube Kodu</Label>
                 <Input

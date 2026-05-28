@@ -196,9 +196,9 @@ export function MaasListesiView() {
   return (
     <div className="space-y-5">
       {/* Üst bar */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <DonemSecici />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             id="btn-bordro-excel"
             variant="outline"
