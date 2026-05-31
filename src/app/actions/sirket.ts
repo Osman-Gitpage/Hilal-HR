@@ -58,6 +58,67 @@ export async function sirketKur(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Çok adımlı onboarding wizard — şirket + ayarlar tek seferde kaydedilir
+// ─────────────────────────────────────────────────────────────────────────────
+export async function sirketKurVeTamamla(
+  _prevState: { hata?: string; basarili?: boolean } | undefined,
+  formData: FormData
+): Promise<{ hata?: string; basarili?: boolean }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/giris");
+
+  const ad      = (formData.get("sirket_adi") as string)?.trim();
+  const vergi_no = (formData.get("vergi_no") as string)?.trim() || null;
+  const telefon  = (formData.get("telefon") as string)?.trim() || null;
+  const email    = (formData.get("email") as string)?.trim() || null;
+  const adres    = (formData.get("sehir") as string)?.trim() || null;
+
+  const gunluk  = parseFloat(formData.get("gunluk_saat") as string) || 8;
+  const haftalikGun = parseInt(formData.get("haftalik_gun") as string) || 5;
+  // 22 gün = Pzt-Cum, 26 gün = Pzt-Cmt
+  const aylik   = Math.round(gunluk * (haftalikGun === 6 ? 26 : 22));
+
+  if (!ad) return { hata: "Şirket adı zorunludur." };
+
+  const admin = createAdminClient();
+
+  const { data: sirket, error: sirketError } = await admin
+    .from("sirketler")
+    .insert({ ad, vergi_no, telefon, email, adres })
+    .select("id")
+    .single();
+
+  if (sirketError || !sirket) {
+    return { hata: sirketError?.message ?? "Şirket oluşturulamadı." };
+  }
+
+  const { error: ksError } = await admin.from("kullanici_sirket").insert({
+    kullanici_id: user.id,
+    sirket_id: sirket.id,
+    rol: "admin",
+  });
+
+  if (ksError) {
+    await admin.from("sirketler").delete().eq("id", sirket.id);
+    return { hata: ksError.message };
+  }
+
+  // Ayarları kaydet (hata olursa sessizce geç — kullanıcı /ayarlar'dan düzeltebilir)
+  try {
+    await admin.from("ayarlar").insert({
+      sirket_id: sirket.id,
+      gunluk_calisma_saati: gunluk,
+      aylik_calisma_saati: aylik,
+    });
+  } catch {
+    // Non-fatal — kullanıcı /ayarlar'dan düzeltebilir
+  }
+
+  return { basarili: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // T2.1 — Aktif şirketi cookie'ye yaz (multi-company desteği)
 // Client-side store değişince çağrılır; getAuthContext cookie'den okur.
 // ─────────────────────────────────────────────────────────────────────────────

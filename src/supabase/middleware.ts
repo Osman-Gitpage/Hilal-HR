@@ -36,7 +36,9 @@ export async function updateSession(request: NextRequest) {
   // Auth olmayan kullanıcıyı login'e yönlendir
   const isAuthRoute = pathname.startsWith("/giris") || pathname.startsWith("/kayit");
   const isOnboarding = pathname.startsWith("/onboarding");
-  const isPublicRoute = pathname === "/" || isAuthRoute || isOnboarding;
+  const isLanding = pathname.startsWith("/landing");
+  const isSifreSifirla = pathname.startsWith("/sifre-sifirla") || pathname.startsWith("/sifre-guncelle");
+  const isPublicRoute = pathname === "/" || isAuthRoute || isOnboarding || isLanding || isSifreSifirla;
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
@@ -45,7 +47,6 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Giriş yapmış kullanıcıyı login/kayıt'tan dashboard'a yönlendir
-  // (onboarding'den yönlendirmiyoruz — orası şirket kurulum akışının parçası)
   if (user && isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";

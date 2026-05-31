@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createClient } from "@/supabase/server";
 import { DashboardCharts } from "@/components/dashboard/DashboardCharts";
+import { OnboardingChecklist } from "@/components/dashboard/OnboardingChecklist";
 import {
   Users,
   Banknote,
@@ -123,8 +124,8 @@ export default async function DashboardPage() {
   const yil = now.getFullYear();
   const ay = now.getMonth() + 1;
 
-  // 1. Paralel KPI sorguları
-  const [aktifPersonelRes, bordroRes, bekleyenRes, projeRes] = await Promise.all([
+  // 1. Paralel KPI + checklist sorguları
+  const [aktifPersonelRes, bordroRes, bekleyenRes, projeRes, toplamPersonelRes, ayarlarRes, toplamBordroRes] = await Promise.all([
     supabase
       .from("employment_periods")
       .select("personel_id", { count: "exact", head: true })
@@ -150,6 +151,24 @@ export default async function DashboardPage() {
       .select("id", { count: "exact", head: true })
       .eq("sirket_id", sirketId ?? "")
       .eq("durum", "aktif") as any,
+
+    // Checklist: toplam personel (aktif + çıkmış)
+    supabase
+      .from("employment_periods")
+      .select("personel_id", { count: "exact", head: true })
+      .eq("sirket_id", sirketId ?? "") as any,
+
+    // Checklist: ayarlar var mı?
+    supabase
+      .from("ayarlar")
+      .select("id", { count: "exact", head: true })
+      .eq("sirket_id", sirketId ?? "") as any,
+
+    // Checklist: herhangi bir bordro var mı?
+    supabase
+      .from("maas_bordro")
+      .select("id", { count: "exact", head: true })
+      .eq("sirket_id", sirketId ?? "") as any,
   ]);
 
   const aktifPersonel: number = aktifPersonelRes.count ?? 0;
@@ -157,6 +176,41 @@ export default async function DashboardPage() {
     .reduce((s, b) => s + (b.toplam_odeme ?? 0), 0);
   const bekleyenOnay: number = bekleyenRes.count ?? 0;
   const aktifProje: number = projeRes.count ?? 0;
+
+  // Checklist verileri
+  const herhangiPersonelVar: boolean = (toplamPersonelRes.count ?? 0) > 0;
+  const ayarlarVar: boolean = (ayarlarRes.count ?? 0) > 0;
+  const herhanigBordroVar: boolean = (toplamBordroRes.count ?? 0) > 0;
+
+  const checklistItems = [
+    {
+      id: "sirket",
+      label: "Şirket kuruldu",
+      desc: "Tamamlandı",
+      done: true,
+    },
+    {
+      id: "ayarlar",
+      label: "Çalışma ayarları yapıldı",
+      desc: "Günlük ve aylık çalışma saatlerini belirleyin",
+      done: ayarlarVar,
+      href: "/ayarlar",
+    },
+    {
+      id: "personel",
+      label: "İlk personel eklendi",
+      desc: "Çalışanlarınızı sisteme kaydedin",
+      done: herhangiPersonelVar,
+      href: "/personel/yeni",
+    },
+    {
+      id: "bordro",
+      label: "İlk bordro hesaplandı",
+      desc: "Aylık bordro işlemlerinizi başlatın",
+      done: herhanigBordroVar,
+      href: "/bordro",
+    },
+  ];
 
   const bugun = formatTarih(now);
 
@@ -260,6 +314,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8 pb-10">
+      {/* ── Başlangıç Rehberi Checklist ── */}
+      <OnboardingChecklist items={checklistItems} sirketId={sirketId ?? ""} />
+
       {/* ── Üst Başlık & Hızlı İşlemler ── */}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 pb-2">
         <div>

@@ -1,125 +1,167 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { kayitOl } from "@/app/actions/auth";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import Link from "next/link";
 
 type Durum = { hata?: string; basarili?: string } | undefined;
 
 export function KayitForm() {
-  const [durum, action, yukleniyor] = useActionState<Durum, FormData>(
-    kayitOl,
-    undefined
-  );
+  const [durum, action, yukleniyor] = useActionState<Durum, FormData>(kayitOl, undefined);
+  const [sifreGoster, setSifreGoster] = useState(false);
 
   return (
-    <Card className="border-slate-700 bg-slate-800/80 backdrop-blur shadow-2xl">
-      <CardHeader className="space-y-1 pb-4">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center">
-            <span className="text-white font-bold text-sm">H</span>
-          </div>
-          <span className="text-slate-300 text-sm font-medium">Hilal HR</span>
+    <div className="flex flex-col gap-8">
+      {/* Mobile logo */}
+      <div className="lg:hidden flex items-center gap-2.5">
+        <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
+          <span className="text-zinc-950 font-black text-sm leading-none">H</span>
         </div>
-        <CardTitle className="text-2xl font-bold text-white">
-          Kayıt Ol
-        </CardTitle>
-        <CardDescription className="text-slate-400">
-          Yeni hesap oluşturun
-        </CardDescription>
-      </CardHeader>
+        <span className="text-white font-semibold tracking-tight">Hilal İK</span>
+      </div>
 
-      <form action={action}>
-        <CardContent className="space-y-4">
-          {durum?.hata && (
-            <div className="rounded-md bg-red-500/10 border border-red-500/20 px-3 py-2 text-sm text-red-400">
-              {durum.hata}
-            </div>
-          )}
-          {durum?.basarili && (
-            <div className="rounded-md bg-green-500/10 border border-green-500/20 px-3 py-2 text-sm text-green-400">
-              {durum.basarili}
-            </div>
-          )}
+      {/* Header */}
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-2xl font-bold text-white tracking-tight">Hesap oluşturun</h1>
+        <p className="text-sm text-zinc-500">Dakikalar içinde başlayın, kurulum gerekmez</p>
+      </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="adSoyad" className="text-slate-300">
-              Ad Soyad
-            </Label>
-            <Input
-              id="adSoyad"
-              name="adSoyad"
-              type="text"
-              placeholder="Ahmet Yılmaz"
-              required
-              className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
-            />
+      {/* Form */}
+      <form action={action} className="flex flex-col gap-5">
+        {/* Error */}
+        {durum?.hata && (
+          <div className="flex items-start gap-3 rounded-xl bg-red-500/8 border border-red-500/20 px-4 py-3">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0 mt-0.5">
+              <circle cx="8" cy="8" r="7" stroke="#f87171" strokeWidth="1.5"/>
+              <path d="M8 5v3.5M8 11h.01" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            <span className="text-sm text-red-400 leading-relaxed">{durum.hata}</span>
           </div>
+        )}
 
-          <div className="space-y-1.5">
-            <Label htmlFor="email" className="text-slate-300">
-              E-posta
-            </Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="ornek@sirket.com"
-              required
-              autoComplete="email"
-              className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
-            />
+        {/* Başarı */}
+        {durum?.basarili && (
+          <div className="flex items-start gap-3 rounded-xl bg-emerald-500/8 border border-emerald-500/20 px-4 py-3">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0 mt-0.5">
+              <circle cx="8" cy="8" r="7" stroke="#34d399" strokeWidth="1.5"/>
+              <path d="M5 8l2 2 4-4" stroke="#34d399" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span className="text-sm text-emerald-400 leading-relaxed">{durum.basarili}</span>
           </div>
+        )}
 
-          <div className="space-y-1.5">
-            <Label htmlFor="password" className="text-slate-300">
-              Şifre
-            </Label>
-            <Input
+        {/* Ad Soyad */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="adSoyad" className="text-sm font-medium text-zinc-300">Ad Soyad</label>
+          <input
+            id="adSoyad"
+            name="adSoyad"
+            type="text"
+            placeholder="Ahmet Yılmaz"
+            required
+            autoComplete="name"
+            className={inputCls}
+          />
+        </div>
+
+        {/* E-posta */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="email" className="text-sm font-medium text-zinc-300">E-posta</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            placeholder="ornek@sirket.com"
+            required
+            autoComplete="email"
+            className={inputCls}
+          />
+        </div>
+
+        {/* Şifre */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="password" className="text-sm font-medium text-zinc-300">Şifre</label>
+          <div className="relative">
+            <input
               id="password"
               name="password"
-              type="password"
+              type={sifreGoster ? "text" : "password"}
               placeholder="En az 8 karakter"
               required
               minLength={8}
               autoComplete="new-password"
-              className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+              className={`${inputCls} pr-11`}
             />
-          </div>
-        </CardContent>
-
-        <CardFooter className="flex flex-col gap-3 pt-2">
-          <Button
-            type="submit"
-            disabled={yukleniyor}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium"
-            id="btn-kayit"
-          >
-            {yukleniyor ? "Kayıt oluşturuluyor..." : "Kayıt Ol"}
-          </Button>
-
-          <p className="text-sm text-slate-400 text-center">
-            Zaten hesabınız var mı?{" "}
-            <Link
-              href="/giris"
-              className="text-blue-400 hover:text-blue-300 font-medium"
+            <button
+              type="button"
+              onClick={() => setSifreGoster((p) => !p)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+              aria-label={sifreGoster ? "Şifreyi gizle" : "Şifreyi göster"}
             >
-              Giriş Yap
-            </Link>
-          </p>
-        </CardFooter>
+              {sifreGoster ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  <path d="M10.73 15.27A3 3 0 1 0 8.73 9.27" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  <path d="M1 1l22 22" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5"/>
+                </svg>
+              )}
+            </button>
+          </div>
+          {/* Şifre gücü ipucu */}
+          <p className="text-xs text-zinc-600">En az 8 karakter, harf ve rakam içermeli</p>
+        </div>
+
+        {/* Submit */}
+        <button
+          id="btn-kayit"
+          type="submit"
+          disabled={yukleniyor}
+          className="w-full bg-white text-zinc-950 font-semibold py-2.5 rounded-xl text-sm hover:bg-zinc-100 transition-all duration-200 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-1"
+        >
+          {yukleniyor ? (
+            <>
+              <svg className="animate-spin" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeOpacity="0.3"/>
+                <path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+              Hesap oluşturuluyor...
+            </>
+          ) : "Kayıt Ol"}
+        </button>
+
+        {/* KVKK */}
+        <p className="text-xs text-zinc-600 text-center leading-relaxed">
+          Kayıt olarak{" "}
+          <a href="#" className="text-zinc-500 hover:text-zinc-400 underline underline-offset-2 transition-colors">Kullanım Koşulları</a>{" "}
+          ve{" "}
+          <a href="#" className="text-zinc-500 hover:text-zinc-400 underline underline-offset-2 transition-colors">Gizlilik Politikası</a>
+          &apos;nı kabul etmiş olursunuz.
+        </p>
       </form>
-    </Card>
+
+      {/* Divider */}
+      <div className="flex items-center gap-3">
+        <div className="flex-1 h-px bg-zinc-800" />
+        <span className="text-xs text-zinc-600">veya</span>
+        <div className="flex-1 h-px bg-zinc-800" />
+      </div>
+
+      {/* Footer */}
+      <p className="text-sm text-zinc-500 text-center">
+        Zaten hesabınız var mı?{" "}
+        <Link href="/giris" className="text-zinc-300 hover:text-white font-medium transition-colors duration-200">
+          Giriş Yap
+        </Link>
+      </p>
+    </div>
   );
 }
+
+const inputCls =
+  "w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-colors duration-200";
