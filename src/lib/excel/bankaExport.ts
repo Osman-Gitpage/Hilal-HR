@@ -6,7 +6,7 @@
  */
 
 import type { BankaOdemeSatiri } from "@/hooks/useMaasBordro";
-import { bankaEldenHesapla } from "@/lib/utils/maasHesap";
+import { bankaEldenHesaplaYeni } from "@/lib/utils/maasHesap";
 import {
   yeniWorkbook, sutunTaninmindanSheetEkle, workbookIndir,
   excelPara, excelDonem,
@@ -20,7 +20,7 @@ import {
 type BankaSatir = BankaOdemeSatiri & { _elden: number };
 
 function bankaHazirla(b: BankaOdemeSatiri): BankaSatir {
-  const elden = bankaEldenHesapla(b.toplam_odeme, b.banka, b.bes_bordro, b.tazminat, b.avans);
+  const elden = bankaEldenHesaplaYeni(b.bordro_elden ?? 0, b.banka, b.bordro_banka, b.tazminat, b.avans);
   return { ...b, _elden: elden };
 }
 

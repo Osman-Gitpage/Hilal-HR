@@ -561,6 +561,8 @@ export async function donemBankaOdemeGetir(yil: number, ay: number) {
       bes_bordro: b.bes,
       // Kaydedilmiş mi?
       kayitli: !!odeme,
+      bordro_elden: Number(b.elden ?? 0),
+      bordro_banka: Number(b.banka ?? 0),
     };
   });
 }
@@ -580,6 +582,7 @@ export async function bankaOdemeKaydet(
     odeme_not: string | null;
     toplam_odeme: number;
     bes_bordro: number;
+    elden_banka?: number;
   }[]
 ) {
   const { supabase, sirketId } = await getAuthContext();
@@ -594,7 +597,7 @@ export async function bankaOdemeKaydet(
     bes: s.bes_bordro,
     tazminat: s.tazminat,
     avans: s.avans,
-    elden_banka: s.toplam_odeme - (s.banka + s.bes_bordro + s.tazminat + s.avans),
+    elden_banka: s.elden_banka !== undefined ? s.elden_banka : s.toplam_odeme - (s.banka + s.bes_bordro + s.tazminat + s.avans),
     odeme_not: s.odeme_not,
   }));
 

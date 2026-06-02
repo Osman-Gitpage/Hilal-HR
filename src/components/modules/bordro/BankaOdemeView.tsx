@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useUIStore } from "@/stores/uiStore";
 import { useBankaOdeme, type BankaOdemeSatiri } from "@/hooks/useMaasBordro";
 import { bankaOdemeKaydet } from "@/app/actions/maas";
-import { bankaEldenHesapla } from "@/lib/utils/maasHesap";
+import { bankaEldenHesaplaYeni } from "@/lib/utils/maasHesap";
 import { formatPara, formatAdSoyad, num } from "@/lib/utils/index";
 import { DonemSecici } from "@/components/modules/bordro/DonemSecici";
 import { ExcelSutunSeciciModal } from "@/components/ui/ExcelSutunSeciciModal";
@@ -26,6 +26,7 @@ interface SatirState {
   avans: number;
   odeme_not: string;
   toplam_odeme: number;
+  bordro_elden?: number;
 }
 
 export function BankaOdemeView() {
@@ -49,6 +50,7 @@ export function BankaOdemeView() {
       avans:       b.avans,
       odeme_not:   b.odeme_not ?? "",
       toplam_odeme: b.toplam_odeme,
+      bordro_elden: b.bordro_elden,
     };
   };
 
@@ -65,7 +67,14 @@ export function BankaOdemeView() {
   const toplamAvans    = satirListesi.reduce((s, b) => s + (getSatir(b).avans    ?? 0), 0);
   const toplamElden = satirListesi.reduce((s, b) => {
     const satir = getSatir(b);
-    return s + bankaEldenHesapla(satir.toplam_odeme, satir.banka, satir.bes_bordro, satir.tazminat, satir.avans);
+    const elden = bankaEldenHesaplaYeni(
+      satir.bordro_elden ?? 0,
+      satir.banka,
+      b.bordro_banka,
+      satir.tazminat,
+      satir.avans
+    );
+    return s + (elden > 0 ? elden : 0);
   }, 0);
 
   async function handleKaydet() {
@@ -73,6 +82,7 @@ export function BankaOdemeView() {
     startTransition(async () => {
       const payload = satirListesi.map(b => {
         const s = getSatir(b);
+        const eldenCalculated = bankaEldenHesaplaYeni(s.bordro_elden ?? 0, s.banka, b.bordro_banka, s.tazminat, s.avans);
         return {
           bordro_id:   s.bordro_id,
           personel_id: s.personel_id,
@@ -82,6 +92,7 @@ export function BankaOdemeView() {
           odeme_not:   s.odeme_not || null,
           toplam_odeme: s.toplam_odeme,
           bes_bordro:  s.bes_bordro,
+          elden_banka: eldenCalculated,
         };
       });
       const sonuc = await bankaOdemeKaydet(seciliDonemYil, seciliDonemAy, payload);
@@ -178,7 +189,7 @@ export function BankaOdemeView() {
             ) : (
               satirListesi.map((b: BankaOdemeSatiri, idx: number) => {
                 const s = getSatir(b);
-                const elden = bankaEldenHesapla(s.toplam_odeme, s.banka, s.bes_bordro, s.tazminat, s.avans);
+                const elden = bankaEldenHesaplaYeni(s.bordro_elden ?? 0, s.banka, b.bordro_banka, s.tazminat, s.avans);
                 return (
                   <TableRow key={b.bordro_id}>
                     <TableCell className="sticky left-0 bg-card text-muted-foreground text-xs">{idx + 1}</TableCell>

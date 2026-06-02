@@ -68,6 +68,8 @@ export type BankaOdemeSatiri = {
   toplam_odeme: number;
   bes_bordro: number;
   kayitli: boolean;
+  bordro_elden: number;
+  bordro_banka: number;
 };
 
 export type BordroDetayItem = MaasBordro & {
@@ -301,6 +303,8 @@ async function fetchBankaOdeme(
       toplam_odeme: b.toplam_odeme,
       bes_bordro:  b.bes,
       kayitli:     !!odeme,
+      bordro_elden: Number(b.elden ?? 0),
+      bordro_banka: Number(b.banka ?? 0),
     };
   });
 }

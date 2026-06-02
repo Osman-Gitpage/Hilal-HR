@@ -107,6 +107,20 @@ export function bankaEldenHesapla(
 }
 
 /**
+ * Banka ödeme sayfası yeni elden hesabı (Bordro Elden'den fark düşme)
+ * Elden = bordro_elden - (banka_duzenle - bordro_bankasi) - tazminat - avans
+ */
+export function bankaEldenHesaplaYeni(
+  bordro_elden: number,
+  banka_duzenle: number,
+  bordro_bankasi: number,
+  tazminat: number,
+  avans: number
+): number {
+  return yuvarla(bordro_elden - (banka_duzenle - bordro_bankasi) - tazminat - avans);
+}
+
+/**
  * İçeri avans devir hesabı
  * Devredilecek = (devredilen + verilen) - kesilen
  */
