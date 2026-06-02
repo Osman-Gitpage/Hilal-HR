@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { toast } from "sonner";
 import { Save, Loader2, Banknote, HandCoins, Shield, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,14 @@ export function BankaOdemeView() {
   const { data: satirListesi = [], isLoading, isError, refetch } = useBankaOdeme(
     seciliDonemYil, seciliDonemAy
   );
+
+  const siraliSatirListesi = useMemo(() => {
+    return [...satirListesi].sort((a, b) => {
+      const nameA = formatAdSoyad(a.personel.ad, a.personel.soyad).toLocaleLowerCase("tr");
+      const nameB = formatAdSoyad(b.personel.ad, b.personel.soyad).toLocaleLowerCase("tr");
+      return nameA.localeCompare(nameB, "tr");
+    });
+  }, [satirListesi]);
   const [yerelDuzenlemeler, setYerelDuzenlemeler] = useState<Record<string, SatirState>>({});
   const [isPending, startTransition] = useTransition();
   const [excelModalAcik, setExcelModalAcik] = useState(false);
@@ -62,10 +70,10 @@ export function BankaOdemeView() {
   };
 
   // KPI
-  const toplamBanka    = satirListesi.reduce((s, b) => s + (getSatir(b).banka    ?? 0), 0);
-  const toplamTazminat = satirListesi.reduce((s, b) => s + (getSatir(b).tazminat ?? 0), 0);
-  const toplamAvans    = satirListesi.reduce((s, b) => s + (getSatir(b).avans    ?? 0), 0);
-  const toplamElden = satirListesi.reduce((s, b) => {
+  const toplamBanka    = siraliSatirListesi.reduce((s, b) => s + (getSatir(b).banka    ?? 0), 0);
+  const toplamTazminat = siraliSatirListesi.reduce((s, b) => s + (getSatir(b).tazminat ?? 0), 0);
+  const toplamAvans    = siraliSatirListesi.reduce((s, b) => s + (getSatir(b).avans    ?? 0), 0);
+  const toplamElden = siraliSatirListesi.reduce((s, b) => {
     const satir = getSatir(b);
     const elden = bankaEldenHesaplaYeni(
       satir.bordro_elden ?? 0,
@@ -78,9 +86,9 @@ export function BankaOdemeView() {
   }, 0);
 
   async function handleKaydet() {
-    if (satirListesi.length === 0) { toast.error("Kaydedilecek veri yok."); return; }
+    if (siraliSatirListesi.length === 0) { toast.error("Kaydedilecek veri yok."); return; }
     startTransition(async () => {
-      const payload = satirListesi.map(b => {
+      const payload = siraliSatirListesi.map(b => {
         const s = getSatir(b);
         const eldenCalculated = bankaEldenHesaplaYeni(s.bordro_elden ?? 0, s.banka, b.bordro_banka, s.tazminat, s.avans);
         return {
@@ -119,12 +127,12 @@ export function BankaOdemeView() {
             variant="outline"
             size="sm"
             onClick={() => setExcelModalAcik(true)}
-            disabled={isLoading || satirListesi.length === 0}
+            disabled={isLoading || siraliSatirListesi.length === 0}
             className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-700"
           >
             Excel&apos;e Aktar
           </Button>
-          <Button id="btn-banka-kaydet" onClick={handleKaydet} disabled={isPending || satirListesi.length === 0} className="gap-2">
+          <Button id="btn-banka-kaydet" onClick={handleKaydet} disabled={isPending || siraliSatirListesi.length === 0} className="gap-2">
             {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Kaydet
           </Button>
@@ -180,14 +188,14 @@ export function BankaOdemeView() {
               <TableRow>
                 <TableCell colSpan={9} className="text-center py-10 text-destructive">Veriler yüklenirken hata oluştu.</TableCell>
               </TableRow>
-            ) : satirListesi.length === 0 ? (
+            ) : siraliSatirListesi.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                   Bu dönemde bordro kaydı yok.
                 </TableCell>
               </TableRow>
             ) : (
-              satirListesi.map((b: BankaOdemeSatiri, idx: number) => {
+              siraliSatirListesi.map((b: BankaOdemeSatiri, idx: number) => {
                 const s = getSatir(b);
                 const elden = bankaEldenHesaplaYeni(s.bordro_elden ?? 0, s.banka, b.bordro_banka, s.tazminat, s.avans);
                 return (
@@ -262,7 +270,7 @@ export function BankaOdemeView() {
         tumSutunlar={BANKA_TUM_SUTUNLAR}
         sutunSetleri={BANKA_SUTUN_SETLERI}
         onExport={(sutunlar) =>
-          bankaOdemeExport(satirListesi, {
+          bankaOdemeExport(siraliSatirListesi, {
             sutunlar: sutunlar as never,
             yil: seciliDonemYil,
             ay: seciliDonemAy,

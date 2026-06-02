@@ -82,6 +82,14 @@ export function BordroVeriGirisiView() {
     isError: personelHata,
   } = useDonemPersoneller(seciliDonemYil, seciliDonemAy);
 
+  const siraliPersoneller = useMemo(() => {
+    return [...personeller].sort((a, b) => {
+      const nameA = formatAdSoyad(a.ad, a.soyad).toLocaleLowerCase("tr");
+      const nameB = formatAdSoyad(b.ad, b.soyad).toLocaleLowerCase("tr");
+      return nameA.localeCompare(nameB, "tr");
+    });
+  }, [personeller]);
+
   const {
     data: mevcutBordro,
     isLoading: bordroYukleniyor,
@@ -277,7 +285,7 @@ export function BordroVeriGirisiView() {
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {personeller.map((p) => (
+                {siraliPersoneller.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {formatAdSoyad(p.ad, p.soyad)}
                   </SelectItem>
