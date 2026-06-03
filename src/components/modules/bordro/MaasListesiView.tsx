@@ -344,6 +344,12 @@ export function MaasListesiView() {
                 const hakEdis        = _calismaSaati * saatlikUcret;
                 const mesaiBedeli    = _mesaiSaati   * saatlikUcret;
 
+                // Diğer(+): tazminat + senelik_izin + ek ödeme kalemleri
+                const ekOdeme   = (b.bordro_ek_kalem ?? []).filter(k => k.tip === "odeme").reduce((s, k) => s + Number(k.tutar ?? 0), 0);
+                const ekKesinti = (b.bordro_ek_kalem ?? []).filter(k => k.tip === "kesinti").reduce((s, k) => s + Number(k.tutar ?? 0), 0);
+                const digerPlus  = Number(b.tazminat ?? 0) + Number(b.senelik_izin ?? 0) + ekOdeme;
+                const digerMinus = Number(b.icra ?? 0) + ekKesinti + Number(b.iceri_avans_kesinti ?? 0);
+
                 return (
                   <TableRow key={b.id} className="text-sm hover:bg-muted/40 transition-colors">
                     <TableCell className="sticky left-0 bg-card text-muted-foreground text-xs">{idx + 1}</TableCell>
@@ -362,14 +368,14 @@ export function MaasListesiView() {
                     <TableCell>{formatPara(Number(b.yol))}</TableCell>
                     <TableCell>{formatPara(Number(b.yemek))}</TableCell>
                     <TableCell>{formatPara(Number(b.prim))}</TableCell>
-                    <TableCell>-</TableCell>
+                    <TableCell>{formatPara(digerPlus)}</TableCell>
                     <TableCell className="font-bold text-emerald-700 dark:text-emerald-400">
                       {formatPara(Number(b.toplam_odeme))}
                     </TableCell>
                     <TableCell>{formatPara(Number(b.banka))}</TableCell>
                     <TableCell>{formatPara(Number(b.bes))}</TableCell>
                     <TableCell>{formatPara(Number(b.avans))}</TableCell>
-                    <TableCell>-</TableCell>
+                    <TableCell>{formatPara(digerMinus)}</TableCell>
                     <TableCell className="font-bold text-rose-600 dark:text-rose-400">
                       {formatPara(Number(b.toplam_kesinti))}
                     </TableCell>

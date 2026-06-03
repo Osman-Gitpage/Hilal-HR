@@ -125,7 +125,7 @@ async function _olustur(satirlar: BordroSatir[], yil: number, ay: number): Promi
     const ekKesinti = ekKesintilerMap.get(b.id) ?? 0;
 
     const digerPlus = Number(b.tazminat ?? 0) + Number(b.senelik_izin ?? 0) + ekOdeme;
-    const digerMinus = Number(b.icra ?? 0) + ekKesinti;
+    const digerMinus = Number(b.icra ?? 0) + ekKesinti + Number(b.iceri_avans_kesinti ?? 0);
 
     const elden = Number(b.toplam_odeme ?? 0) - Number(b.toplam_kesinti ?? 0);
     const eskiDevir = Number(b.iceri_avans_devir ?? 0);
@@ -198,28 +198,30 @@ async function _olustur(satirlar: BordroSatir[], yil: number, ay: number): Promi
     yeniDevir: fmt(totals.yeniDevir) as any,
   });
 
-  // Column widths definition to match available 277mm precisely
+  // Sütun genişlikleri — toplam tam 277mm (A4 landscape: 297mm - 2×10mm margin)
+  // 5+22+15+9+15+7+15+13+13+13+13+16+16+13+13+13+16+16+17+17 = 277mm
+  // eskiDevir/yeniDevir 17mm → "104.600,00" (10 karakter) 7.5pt'de sığar
   const columnStyles: Record<string, any> = {
-    no: { cellWidth: 6, textColor: [100, 116, 139] },
-    adSoyad: { halign: "left", cellWidth: 30, fontStyle: "bold", textColor: [15, 23, 42] },
-    maas: { halign: "right", cellWidth: 15 },
-    calismaSaati: { halign: "center", cellWidth: 12 },
-    hakedis: { halign: "right", cellWidth: 15 },
-    mesaiSaati: { halign: "center", cellWidth: 12 },
-    mesaiBedeli: { halign: "right", cellWidth: 15 },
-    yol: { halign: "right", cellWidth: 12 },
-    yemek: { halign: "right", cellWidth: 12 },
-    prim: { halign: "right", cellWidth: 12 },
-    digerPlus: { halign: "right", cellWidth: 12 },
-    toplamOdeme: { halign: "right", cellWidth: 16.5 },
-    banka: { halign: "right", cellWidth: 16.5 },
-    bes: { halign: "right", cellWidth: 12 },
-    avans: { halign: "right", cellWidth: 12 },
-    digerMinus: { halign: "right", cellWidth: 12 },
-    toplamKesinti: { halign: "right", cellWidth: 16.5 },
-    elden: { halign: "right", cellWidth: 16.5 },
-    eskiDevir: { halign: "right", cellWidth: 13 },
-    yeniDevir: { halign: "right", cellWidth: 13 },
+    no:            { cellWidth: 5,  textColor: [100, 116, 139] },
+    adSoyad:       { halign: "left", cellWidth: 22, fontStyle: "bold", textColor: [15, 23, 42] },
+    maas:          { halign: "right", cellWidth: 15 },
+    calismaSaati:  { halign: "center", cellWidth: 9 },
+    hakedis:       { halign: "right", cellWidth: 15 },
+    mesaiSaati:    { halign: "center", cellWidth: 7 },
+    mesaiBedeli:   { halign: "right", cellWidth: 15 },
+    yol:           { halign: "right", cellWidth: 13 },
+    yemek:         { halign: "right", cellWidth: 13 },
+    prim:          { halign: "right", cellWidth: 13 },
+    digerPlus:     { halign: "right", cellWidth: 13 },
+    toplamOdeme:   { halign: "right", cellWidth: 16 },
+    banka:         { halign: "right", cellWidth: 16 },
+    bes:           { halign: "right", cellWidth: 13 },
+    avans:         { halign: "right", cellWidth: 13 },
+    digerMinus:    { halign: "right", cellWidth: 13 },
+    toplamKesinti: { halign: "right", cellWidth: 16 },
+    elden:         { halign: "right", cellWidth: 16 },
+    eskiDevir:     { halign: "right", cellWidth: 17 },
+    yeniDevir:     { halign: "right", cellWidth: 17 },
   };
 
   autoTable(doc, {
@@ -250,24 +252,26 @@ async function _olustur(satirlar: BordroSatir[], yil: number, ay: number): Promi
     margin: { left: 10, right: 10 },
     styles: {
       font: "Roboto",
-      fontSize: 7.6, // Scaled up to 7.6 to make it much larger and match the mockup
-      cellPadding: { top: 1.4, bottom: 1.4, left: 0.5, right: 0.5 }, // Tall padding with tight horizontal spacing
+      fontSize: 7.5,
+      cellPadding: { top: 1.4, bottom: 1.4, left: 0.4, right: 0.4 }, // 0.4mm yatay → daha fazla metin alanı
       halign: "center",
       valign: "middle",
+      overflow: "hidden", // Rakamların wrap yapmasını engelle — tek satırda tut
       lineWidth: { top: 0, bottom: 0.1, left: 0, right: 0 },
-      lineColor: [226, 232, 240], // #e2e8f0 ince çizgiler
-      textColor: [0, 0, 0], // Pure black for high contrast
-      fillColor: [255, 255, 255], // All rows white
+      lineColor: [226, 232, 240],
+      textColor: [0, 0, 0],
+      fillColor: [255, 255, 255],
     },
     headStyles: {
       font: "Roboto",
       fontStyle: "bold",
-      fillColor: [255, 255, 255], // White background header
-      textColor: [0, 0, 0], // Black text
-      fontSize: 7.6, // Scaled up to 7.6 to match the body
-      cellPadding: { top: 1.8, bottom: 1.8, left: 0.5, right: 0.5 },
+      fillColor: [255, 255, 255],
+      textColor: [0, 0, 0],
+      fontSize: 7.5,
+      cellPadding: { top: 1.8, bottom: 1.8, left: 0.4, right: 0.4 },
+      overflow: "hidden",
       lineWidth: { top: 0.8, bottom: 0.8, left: 0, right: 0 },
-      lineColor: [0, 0, 0], // Thick black line top/bottom of header
+      lineColor: [0, 0, 0],
     },
     columnStyles,
     didParseCell: (data) => {

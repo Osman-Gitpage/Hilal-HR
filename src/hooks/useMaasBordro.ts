@@ -29,6 +29,7 @@ export type BordroListeItem = MaasBordro & {
     soyad: string;
     gorev_unvan: string | null;
   };
+  bordro_ek_kalem?: { tip: string; tutar: number | string | null }[];
 };
 
 export type DonemPersonelItem = {
@@ -97,7 +98,7 @@ async function fetchDonemBordrolari(
   const supabase = createClient();
   const { data, error } = await supabase
     .from("maas_bordro")
-    .select(`*, personel ( id, ad, soyad, gorev_unvan )`)
+    .select(`*, personel ( id, ad, soyad, gorev_unvan ), bordro_ek_kalem ( tip, tutar )`)
     .eq("sirket_id", sirketId)
     .eq("donem_yil", yil)
     .eq("donem_ay", ay)
