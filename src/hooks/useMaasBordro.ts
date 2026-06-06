@@ -456,3 +456,89 @@ export function useEskiBordro(bordroId: string | null) {
     staleTime: Infinity, // Pasif versiyonlar değişmez
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Puantaj Özeti → Bordro Aktarımı
+// puantaj_ay_ozet'ten maaş saati + mesai saatini çeker.
+// Override varsa override, yoksa hesaplanan değeri döndürür.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type PuantajOzetForBordro = {
+  /** Maaş saati: override varsa override, yoksa hesaplanan */
+  maasSaati: number;
+  /** Toplam mesai saati */
+  mesaiSaati: number;
+  /** Override değer kullanıldı mı? */
+  isOverride: boolean;
+};
+
+async function fetchPuantajOzeti(
+  sirketId: string,
+  personelId: string,
+  yil: number,
+  ay: number
+): Promise<PuantajOzetForBordro | null> {
+  const supabase = createClient();
+
+  // 1) Ay özet — override değerleri
+  const { data: ozet, error: ozetErr } = await supabase
+    .from("puantaj_ay_ozet")
+    .select("maas_saati_override")
+    .eq("sirket_id", sirketId)
+    .eq("personel_id", personelId)
+    .eq("yil", yil)
+    .eq("ay", ay)
+    .maybeSingle();
+
+  if (ozetErr) throw new Error(ozetErr.message);
+
+  // 2) Hesaplanan değerler için genel puantaj kayıtları
+  const ayBaslangic = `${yil}-${String(ay).padStart(2, "0")}-01`;
+  const ayBitis = new Date(yil, ay, 0).toISOString().split("T")[0];
+
+  const { data: puantajlar, error: pErr } = await supabase
+    .from("puantaj_genel")
+    .select("calisma_saati, mesai_saati, ozel_durum")
+    .eq("sirket_id", sirketId)
+    .eq("personel_id", personelId)
+    .gte("tarih", ayBaslangic)
+    .lte("tarih", ayBitis);
+
+  if (pErr) throw new Error(pErr.message);
+
+  // GenelPuantajView.hesaplaToplam ile aynı mantık
+  let hesaplananCalisma = 0;
+  let hesaplananMesai = 0;
+
+  for (const p of puantajlar ?? []) {
+    if (p.calisma_saati) {
+      hesaplananCalisma += p.calisma_saati;
+    }
+    if (p.mesai_saati) {
+      hesaplananMesai += p.mesai_saati;
+    }
+  }
+
+  const maasSaatiOverride = ozet?.maas_saati_override ?? null;
+  const isOverride = maasSaatiOverride !== null;
+
+  return {
+    maasSaati:  isOverride ? (maasSaatiOverride as number) : hesaplananCalisma,
+    mesaiSaati: hesaplananMesai,
+    isOverride,
+  };
+}
+
+export function usePuantajOzeti(
+  personelId: string | null,
+  yil: number,
+  ay: number
+) {
+  const sirketId = useSirketStore((s) => s.aktifSirketId);
+  return useQuery({
+    queryKey: ["puantaj_ozeti_bordro", sirketId ?? "", personelId ?? "", yil, ay],
+    queryFn: () => fetchPuantajOzeti(sirketId!, personelId!, yil, ay),
+    enabled: !!sirketId && !!personelId,
+    staleTime: 30_000,
+  });
+}

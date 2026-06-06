@@ -14,7 +14,7 @@
 
 import { useState, useEffect, useTransition, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Save, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -39,6 +39,7 @@ import {
   usePersonelBordro,
   useGecenAyAvans,
   useInvalidateBordro,
+  usePuantajOzeti,
 } from "@/hooks/useMaasBordro";
 import { useAyarlar } from "@/hooks/useAyarlar";
 import { useBordroForm } from "@/hooks/useBordroForm";
@@ -59,6 +60,7 @@ export function BordroVeriGirisiView() {
   const { seciliDonemYil, seciliDonemAy } = useUIStore();
   const [seciliPersonelId, setSeciliPersonelId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [puantajAktarildi, setPuantajAktarildi] = useState(false);
   const invalidate = useInvalidateBordro();
 
   // ── Tab persistence ──
@@ -74,6 +76,13 @@ export function BordroVeriGirisiView() {
   // ── Ayarlar ──
   const { data: ayarlar } = useAyarlar();
   const aylikCalisma = ayarlar?.aylik_calisma_saati ?? VARSAYILAN_AYLIK_CALISMA_SAATI;
+
+  // ── Puantaj özeti (aktarım için) ──
+  const { data: puantajOzeti, isFetching: puantajYukleniyor } = usePuantajOzeti(
+    seciliPersonelId,
+    seciliDonemYil,
+    seciliDonemAy
+  );
 
   // ── Data queries ──
   const {
@@ -146,9 +155,25 @@ export function BordroVeriGirisiView() {
         if (!devam) return;
       }
       setSeciliPersonelId(yeniId);
+      setPuantajAktarildi(false);
     },
     [isDirty, seciliPersonelId]
   );
+
+  // ── Puantajdan Aktar ──
+  const handlePuantajAktar = useCallback(() => {
+    if (!puantajOzeti) {
+      toast.error("Puantaj verisi bulunamadı.");
+      return;
+    }
+    setField("calismaSaati", puantajOzeti.maasSaati);
+    setField("mesaiSaati", puantajOzeti.mesaiSaati);
+    setPuantajAktarildi(true);
+    const kaynak = puantajOzeti.isOverride ? "(düzenlenmiş değer)" : "(hesaplanan değer)";
+    toast.success(
+      `Puantaj aktarıldı ${kaynak}: ${puantajOzeti.maasSaati} saat çalışma, ${puantajOzeti.mesaiSaati} saat mesai. Kontrol edip kaydedin.`
+    );
+  }, [puantajOzeti, setField]);
 
   const handleAciklamaChange = useCallback(
     (value: string) => dispatch({ type: "SET_ACIKLAMA", value }),
@@ -293,6 +318,31 @@ export function BordroVeriGirisiView() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Puantajdan Aktar butonu */}
+          {seciliPersonelId && !duzenlemeKapali && (
+            <button
+              type="button"
+              id="btn-puantajdan-aktar"
+              onClick={handlePuantajAktar}
+              disabled={puantajYukleniyor || !puantajOzeti}
+              title={puantajOzeti?.isOverride ? "Puantaj (düzenlenmiş değer) kullanılacak" : "Puantaj (hesaplanan değer) kullanılacak"}
+              className={[
+                "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors",
+                puantajAktarildi
+                  ? "border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
+                  : "border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-400 dark:hover:bg-blue-900/40",
+                (puantajYukleniyor || !puantajOzeti) ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
+              ].join(" ")}
+            >
+              {puantajYukleniyor ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <ClipboardList className="h-3.5 w-3.5" />
+              )}
+              {puantajAktarildi ? "Aktarıldı ✓" : "Puantajdan Aktar"}
+            </button>
+          )}
 
           {/* isDirty göstergesi */}
           {isDirty && seciliPersonelId && (
