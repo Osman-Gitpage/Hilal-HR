@@ -1,12 +1,10 @@
-import type { Metadata } from "next";
 import { BelgeDetayView } from "@/components/modules/cari/BelgeDetayView";
 
-export const metadata: Metadata = { title: "Belge Detay — Cari" };
-
-export default function BelgeDetayPage({
-  params,
-}: {
+interface Props {
   params: Promise<{ belgeId: string }>;
-}) {
-  return <BelgeDetayView paramsPromise={params} />;
+}
+
+export default async function BelgeDetayPage({ params }: Props) {
+  const { belgeId } = await params;
+  return <BelgeDetayView belgeId={belgeId} />;
 }

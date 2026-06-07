@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -127,79 +127,111 @@ export type Database = {
       }
       belge: {
         Row: {
+          aciklama: string
           belge_no: string
           created_at: string
-          gemi_id: string
-          genel_toplam: number
+          firma_id: string | null
+          gemi_adi: string | null
           id: string
-          ilgili_kisi_id: string | null
-          iskonto: number
-          kalemler: Json
-          kdv_orani: number | null
+          kur: number
           notlar: string | null
           para_birimi: string
-          pdf_url: string | null
           sirket_id: string
           tarih: string
-          toplam: number
           tur: string
+          tutar: number
           updated_at: string
         }
         Insert: {
+          aciklama: string
           belge_no: string
           created_at?: string
-          gemi_id: string
-          genel_toplam?: number
+          firma_id?: string | null
+          gemi_adi?: string | null
           id?: string
-          ilgili_kisi_id?: string | null
-          iskonto?: number
-          kalemler?: Json
-          kdv_orani?: number | null
+          kur?: number
           notlar?: string | null
           para_birimi: string
-          pdf_url?: string | null
           sirket_id: string
           tarih: string
-          toplam?: number
           tur: string
+          tutar: number
           updated_at?: string
         }
         Update: {
+          aciklama?: string
           belge_no?: string
           created_at?: string
-          gemi_id?: string
-          genel_toplam?: number
+          firma_id?: string | null
+          gemi_adi?: string | null
           id?: string
-          ilgili_kisi_id?: string | null
-          iskonto?: number
-          kalemler?: Json
-          kdv_orani?: number | null
+          kur?: number
           notlar?: string | null
           para_birimi?: string
-          pdf_url?: string | null
           sirket_id?: string
           tarih?: string
-          toplam?: number
           tur?: string
+          tutar?: number
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "belge_gemi_id_fkey"
-            columns: ["gemi_id"]
+            foreignKeyName: "belge_firma_id_fkey"
+            columns: ["firma_id"]
             isOneToOne: false
-            referencedRelation: "gemi"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "belge_ilgili_kisi_id_fkey"
-            columns: ["ilgili_kisi_id"]
-            isOneToOne: false
-            referencedRelation: "ilgili_kisi"
+            referencedRelation: "firma"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "belge_sirket_id_fkey"
+            columns: ["sirket_id"]
+            isOneToOne: false
+            referencedRelation: "sirketler"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      belge_dosya: {
+        Row: {
+          belge_id: string
+          boyut_byte: number | null
+          created_at: string
+          dosya_adi: string
+          dosya_tipi: string
+          dosya_url: string
+          id: string
+          sirket_id: string
+        }
+        Insert: {
+          belge_id: string
+          boyut_byte?: number | null
+          created_at?: string
+          dosya_adi: string
+          dosya_tipi: string
+          dosya_url: string
+          id?: string
+          sirket_id: string
+        }
+        Update: {
+          belge_id?: string
+          boyut_byte?: number | null
+          created_at?: string
+          dosya_adi?: string
+          dosya_tipi?: string
+          dosya_url?: string
+          id?: string
+          sirket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "belge_dosya_belge_id_fkey"
+            columns: ["belge_id"]
+            isOneToOne: false
+            referencedRelation: "belge"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "belge_dosya_sirket_id_fkey"
             columns: ["sirket_id"]
             isOneToOne: false
             referencedRelation: "sirketler"
@@ -248,69 +280,6 @@ export type Database = {
           },
           {
             foreignKeyName: "bordro_ek_kalem_sirket_id_fkey"
-            columns: ["sirket_id"]
-            isOneToOne: false
-            referencedRelation: "sirketler"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      cari_odeme: {
-        Row: {
-          aciklama: string | null
-          baz_para_birimi: string | null
-          baz_tutar: number | null
-          belge_id: string
-          created_at: string
-          dekont_url: string | null
-          id: string
-          kur: number | null
-          para_birimi: string
-          sirket_id: string
-          tarih: string
-          tutar: number
-          yontem: string
-        }
-        Insert: {
-          aciklama?: string | null
-          baz_para_birimi?: string | null
-          baz_tutar?: number | null
-          belge_id: string
-          created_at?: string
-          dekont_url?: string | null
-          id?: string
-          kur?: number | null
-          para_birimi: string
-          sirket_id: string
-          tarih: string
-          tutar: number
-          yontem: string
-        }
-        Update: {
-          aciklama?: string | null
-          baz_para_birimi?: string | null
-          baz_tutar?: number | null
-          belge_id?: string
-          created_at?: string
-          dekont_url?: string | null
-          id?: string
-          kur?: number | null
-          para_birimi?: string
-          sirket_id?: string
-          tarih?: string
-          tutar?: number
-          yontem?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cari_odeme_belge_id_fkey"
-            columns: ["belge_id"]
-            isOneToOne: false
-            referencedRelation: "belge"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cari_odeme_sirket_id_fkey"
             columns: ["sirket_id"]
             isOneToOne: false
             referencedRelation: "sirketler"
@@ -406,96 +375,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "firma_sirket_id_fkey"
-            columns: ["sirket_id"]
-            isOneToOne: false
-            referencedRelation: "sirketler"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      gemi: {
-        Row: {
-          ad: string
-          created_at: string
-          firma_id: string | null
-          id: string
-          imo_no: string | null
-          notlar: string | null
-          sirket_id: string
-          updated_at: string
-        }
-        Insert: {
-          ad: string
-          created_at?: string
-          firma_id?: string | null
-          id?: string
-          imo_no?: string | null
-          notlar?: string | null
-          sirket_id: string
-          updated_at?: string
-        }
-        Update: {
-          ad?: string
-          created_at?: string
-          firma_id?: string | null
-          id?: string
-          imo_no?: string | null
-          notlar?: string | null
-          sirket_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gemi_firma_id_fkey"
-            columns: ["firma_id"]
-            isOneToOne: false
-            referencedRelation: "firma"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gemi_sirket_id_fkey"
-            columns: ["sirket_id"]
-            isOneToOne: false
-            referencedRelation: "sirketler"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ilgili_kisi: {
-        Row: {
-          ad: string
-          created_at: string
-          gemi_id: string
-          id: string
-          iletisim: string | null
-          sirket_id: string
-        }
-        Insert: {
-          ad: string
-          created_at?: string
-          gemi_id: string
-          id?: string
-          iletisim?: string | null
-          sirket_id: string
-        }
-        Update: {
-          ad?: string
-          created_at?: string
-          gemi_id?: string
-          id?: string
-          iletisim?: string | null
-          sirket_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ilgili_kisi_gemi_id_fkey"
-            columns: ["gemi_id"]
-            isOneToOne: false
-            referencedRelation: "gemi"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ilgili_kisi_sirket_id_fkey"
             columns: ["sirket_id"]
             isOneToOne: false
             referencedRelation: "sirketler"
@@ -712,6 +591,60 @@ export type Database = {
           },
           {
             foreignKeyName: "maas_gecmisi_sirket_id_fkey"
+            columns: ["sirket_id"]
+            isOneToOne: false
+            referencedRelation: "sirketler"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      odeme: {
+        Row: {
+          aciklama: string | null
+          belge_id: string
+          created_at: string
+          id: string
+          kur: number
+          para_birimi: string
+          sirket_id: string
+          tarih: string
+          tutar: number
+          yontem: string
+        }
+        Insert: {
+          aciklama?: string | null
+          belge_id: string
+          created_at?: string
+          id?: string
+          kur?: number
+          para_birimi: string
+          sirket_id: string
+          tarih: string
+          tutar: number
+          yontem: string
+        }
+        Update: {
+          aciklama?: string | null
+          belge_id?: string
+          created_at?: string
+          id?: string
+          kur?: number
+          para_birimi?: string
+          sirket_id?: string
+          tarih?: string
+          tutar?: number
+          yontem?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "odeme_belge_id_fkey"
+            columns: ["belge_id"]
+            isOneToOne: false
+            referencedRelation: "belge"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "odeme_sirket_id_fkey"
             columns: ["sirket_id"]
             isOneToOne: false
             referencedRelation: "sirketler"
@@ -1261,4 +1194,3 @@ export const Constants = {
     },
   },
 } as const
-

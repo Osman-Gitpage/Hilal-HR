@@ -77,55 +77,28 @@ export interface FaturaKodu {
   tarih: string; // "YYYY-MM-DD"
 }
 
-// ─── Cari / Fatura Modülü ─────────────────────────────────────────────────────
 
-export type ParaBirimi = "TRY" | "EUR" | "USD";
-export type BelgeTur = "proforma" | "fatura";
-export type OdemeDurumu = "odenmedi" | "kismi" | "odendi";
-export type OdemeYontem = "banka" | "elden";
-
-/** Belge kalem satırı (kalemler JSON alanı içindeki her eleman) */
-export interface BelgeKalem {
-  id: string; // client-side uuid, DB'ye yazılmaz
-  aciklama: string;
-  miktar: number;
-  birim: string;
-  birim_fiyat: number;
-  iskonto: number; // satır bazlı iskonto (tutar olarak)
-}
-
-/** Gemi listesi satırı (KPI hesaplamalarıyla birlikte) */
-export interface GemiOzet {
-  id: string;
-  ad: string;
-  imo_no: string | null;
-  sirket_ad: string;
-  toplam_alacak: Record<ParaBirimi, number>;
-  odenen: Record<ParaBirimi, number>;
-  kalan: Record<ParaBirimi, number>;
-}
-
-/** Belge satırı (ödeme durumu dahil) */
-export interface BelgeOzet {
-  id: string;
-  tur: BelgeTur;
-  belge_no: string;
-  tarih: string;
-  toplam: number;
-  iskonto: number;
-  genel_toplam: number;
-  para_birimi: ParaBirimi;
-  odeme_durumu: OdemeDurumu;
-  odenen_toplam: number;
-  kalan: number;
-  ilgili_kisi_ad?: string | null;
-}
-
-/** KPI özet verisi (para birimi bazlı) */
-export interface CariKpi {
-  para_birimi: ParaBirimi;
-  toplam_alacak: number;
-  odenen: number;
-  odenmemis: number;
-}
-
+// ─── Cari Modülü ──────────────────────────────────────────────────────────────
+// Tüm cari tipleri src/types/cari.ts'de tanımlıdır.
+export type {
+  ParaBirimi,
+  BelgeTur,
+  OdemeDurumu,
+  OdemeYontem,
+  DosyaTipi,
+  Firma,
+  Belge,
+  BelgeDosya,
+  Odeme,
+  BelgeListItem,
+  BelgeDetay,
+  FirmaBakiye,
+  FirmaListItem,
+  CariKpi,
+  BelgePayload,
+  OdemePayload,
+  TopluOdemeItem,
+  TopluOdemePayload,
+  DosyaPayload,
+  BelgeListFiltre,
+} from "./cari";

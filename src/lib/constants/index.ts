@@ -115,16 +115,13 @@ export const QUERY_KEYS = {
   PROJELER: (sirketId: string) => ["projeler", sirketId] as const,
   PUANTAJ_AY_OZET: (sirketId: string, yil: number, ay: number) =>
     ["puantaj_ay_ozet", sirketId, yil, ay] as const,
-  // Cari
-  GEMI_LIST: (sirketId: string) => ["gemi", "list", sirketId] as const,
-  GEMI_DETAY: (gemiId: string) => ["gemi", "detay", gemiId] as const,
-  BELGE_LIST: (gemiId: string, tur?: string) =>
-    tur ? ["belge", "list", gemiId, tur] as const : ["belge", "list", gemiId] as const,
-  BELGE_DETAY: (belgeId: string) => ["belge", "detay", belgeId] as const,
-  ODEME_LIST: (belgeId: string) => ["cari_odeme", "list", belgeId] as const,
-  CARI_KPI: (sirketId: string) => ["cari", "kpi", sirketId] as const,
-  CARI_GENEL: (sirketId: string, pb?: string) =>
-    pb ? ["cari", "genel", sirketId, pb] as const : ["cari", "genel", sirketId] as const,
+  // Cari Modülü
+  CARI_BELGE_LIST:  (sirketId: string) => ["cari", "belge", "list", sirketId] as const,
+  CARI_BELGE_DETAY: (belgeId: string)  => ["cari", "belge", "detay", belgeId] as const,
+  CARI_DOSYA_LIST:  (belgeId: string)  => ["cari", "dosya", "list", belgeId] as const,
+  CARI_FIRMA_LIST:  (sirketId: string) => ["cari", "firma", "list", sirketId] as const,
+  CARI_KPI:         (sirketId: string) => ["cari", "kpi", sirketId] as const,
+  CARI_ODEME_LIST:  (belgeId: string)  => ["cari", "odeme", "list", belgeId] as const,
 } as const;
 
 // ─────────────────────────────────────────────

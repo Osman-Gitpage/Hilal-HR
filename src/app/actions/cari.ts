@@ -1,779 +1,365 @@
 "use server";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+// ─── Cari Modülü — Server Actions ────────────────────────────────────────────
+// docs/cari-modul.md spesifikasyonuna göre sıfırdan yazıldı.
+
 import { createClient } from "@/supabase/server";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { hesaplaToplam, hesaplaGenelToplam } from "@/lib/cari";
-import type { BelgeKalem, ParaBirimi } from "@/types";
+import {
+  calcOdemeDurumu,
+  kalanHesapla,
+  odemeTlKarsiligi,
+  isGecikmiş,
+} from "@/lib/cari";
+import type {
+  BelgeListItem,
+  BelgeDetay,
+  FirmaListItem,
+  CariKpi,
+  BelgePayload,
+  OdemePayload,
+  TopluOdemePayload,
+  DosyaPayload,
+  BelgeListFiltre,
+  ParaBirimi,
+  Odeme,
+} from "@/types/cari";
 
-// ─────────────────────────────────────────────
-// Yardımcı: Auth + Şirket
-// ─────────────────────────────────────────────
-async function getAuthContext() {
+// ── Yardımcılar ───────────────────────────────────────────────────────────────
+
+/** Aktif şirket ID'sini getirir. */
+async function getSirketId(): Promise<string> {
   const supabase = await createClient();
   const {
     data: { user },
+    error: authErr,
   } = await supabase.auth.getUser();
+  if (authErr || !user) throw new Error("Oturum açık değil.");
 
-  if (!user) redirect("/giris");
-
-  const { data: ks, error: ksError } = await supabase
+  const { data: ks, error: ksErr } = await supabase
     .from("kullanici_sirket")
     .select("sirket_id")
     .eq("kullanici_id", user.id)
-    .limit(1)
     .maybeSingle();
 
-  if (ksError) throw new Error(`Şirket sorgusu başarısız: ${ksError.message}`);
-  if (!ks) throw new Error("Bu kullanıcıya ait şirket kaydı bulunamadı.");
-
-  return { supabase, user, sirketId: (ks as any).sirket_id as string };
+  if (ksErr || !ks) throw new Error("Şirket bulunamadı.");
+  return ks.sirket_id;
 }
 
-// ══════════════════════════════════════════════
-// T-2.1 · GEMİ CRUD
-// ══════════════════════════════════════════════
+type ActionResult<T = undefined> =
+  | (T extends undefined ? { basarili: true } : { basarili: true; veri: T })
+  | { basarili: false; hata: string };
 
-/** Şirkete ait gemi listesi (özet ödeme verileriyle) */
-export async function gemiListesiGetir() {
-  const { supabase, sirketId } = await getAuthContext();
+// ═══════════════════════════════════════════════════════════════════════════════
+// FIRMA
+// ═══════════════════════════════════════════════════════════════════════════════
 
-  const { data, error } = await supabase
-    .from("gemi")
-    .select(
-      `
-      id, ad, imo_no, notlar, created_at,
-      firma ( id, ad ),
-      belge (
-        genel_toplam, para_birimi,
-        cari_odeme ( tutar, baz_tutar, para_birimi )
-      )
-    `
-    )
+/** Firma listesini para birimi bazlı bakiye özetiyle döndürür. */
+export async function firmaListesiGetir(): Promise<FirmaListItem[]> {
+  const sirketId = await getSirketId();
+  const supabase = await createClient();
+
+  const { data: firmalar, error: firmaErr } = await supabase
+    .from("firma")
+    .select("id, ad, notlar")
     .eq("sirket_id", sirketId)
-    .order("created_at", { ascending: false });
+    .order("ad", { ascending: true });
 
-  if (error) throw new Error(error.message);
+  if (firmaErr) throw new Error(firmaErr.message);
 
-  // Para birimi bazlı toplam/ödenen/kalan hesapla
-  return (data ?? []).map((gemi: any) => {
-    const ozet: Record<string, { alacak: number; odenen: number }> = {};
+  if (!firmalar || firmalar.length === 0) return [];
 
-    for (const belge of gemi.belge ?? []) {
-      const pb: string = belge.para_birimi;
-      if (!ozet[pb]) ozet[pb] = { alacak: 0, odenen: 0 };
-      ozet[pb].alacak += Number(belge.genel_toplam ?? 0);
-      for (const odeme of belge.cari_odeme ?? []) {
-      // Çapraz kur varsa baz_tutar (belge PB cinsinden) kullan
-        ozet[pb].odenen += Number(odeme.baz_tutar ?? odeme.tutar ?? 0);
+  // Her firma için belge + ödeme verisi çek
+  const { data: belgeler, error: belgeErr } = await supabase
+    .from("belge")
+    .select(`
+      id, firma_id, tutar, kur, para_birimi,
+      odeme ( tutar, kur )
+    `)
+    .eq("sirket_id", sirketId)
+    .in("firma_id", firmalar.map((f) => f.id));
+
+  if (belgeErr) throw new Error(belgeErr.message);
+
+  const PB_LIST: ParaBirimi[] = ["TRY", "EUR", "USD"];
+
+  return firmalar.map((firma) => {
+    const firmaBelgeleri = (belgeler ?? []).filter(
+      (b) => b.firma_id === firma.id
+    );
+
+    const ozet: Record<ParaBirimi, { alacak: number; odenen: number }> = {
+      TRY: { alacak: 0, odenen: 0 },
+      EUR: { alacak: 0, odenen: 0 },
+      USD: { alacak: 0, odenen: 0 },
+    };
+
+    for (const b of firmaBelgeleri) {
+      const pb = b.para_birimi as ParaBirimi;
+      if (!ozet[pb]) continue;
+      const belgeTlTutar = Number(b.tutar) * Number(b.kur);
+      ozet[pb].alacak += belgeTlTutar;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const odemeler = (b as any).odeme ?? [];
+      for (const o of odemeler) {
+        ozet[pb].odenen += Number(o.tutar) * Number(o.kur);
       }
     }
 
+    const bakiye = PB_LIST.map((pb) => ({
+      para_birimi: pb,
+      alacak: ozet[pb].alacak,
+      odenen: ozet[pb].odenen,
+      kalan: Math.max(0, ozet[pb].alacak - ozet[pb].odenen),
+    })).filter((b) => b.alacak > 0); // Sadece hareket olan PB'leri göster
+
     return {
-      id: gemi.id,
-      ad: gemi.ad,
-      imo_no: gemi.imo_no,
-      notlar: gemi.notlar,
-      firma: gemi.firma ?? null,
-      created_at: gemi.created_at,
-      ozet,
+      id: firma.id,
+      ad: firma.ad,
+      notlar: firma.notlar,
+      bakiye,
     };
   });
 }
 
-/** Gemi detayı (ilgili kişilerle birlikte) */
-export async function gemiDetayGetir(gemiId: string) {
-  const { supabase, sirketId } = await getAuthContext();
+/** Yeni firma ekler. */
+export async function firmaEkle(
+  payload: { ad: string; notlar?: string | null }
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const sirketId = await getSirketId();
+    const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("gemi")
-    .select(`*, firma ( id, ad, vergi_no, telefon, email ), ilgili_kisi ( id, ad, iletisim, created_at )`)
-    .eq("id", gemiId)
-    .eq("sirket_id", sirketId)
-    .single();
+    const { data, error } = await supabase
+      .from("firma")
+      .insert({ sirket_id: sirketId, ad: payload.ad.trim(), notlar: payload.notlar ?? null })
+      .select("id")
+      .single();
 
-  if (error) throw new Error(error.message);
-  return data as any;
+    if (error) return { basarili: false, hata: error.message };
+
+    revalidatePath("/cari/firma");
+    return { basarili: true, veri: { id: data.id } };
+  } catch (e) {
+    return { basarili: false, hata: String(e) };
+  }
 }
 
-/** Yeni gemi ekle */
-export async function gemiEkle(payload: {
-  ad: string;
-  imo_no?: string | null;
-  notlar?: string | null;
-  firma_id?: string | null;
-}) {
-  const { supabase, sirketId } = await getAuthContext();
+/** Firma günceller. */
+export async function firmaGuncelle(
+  id: string,
+  payload: { ad: string; notlar?: string | null }
+): Promise<ActionResult> {
+  try {
+    const sirketId = await getSirketId();
+    const supabase = await createClient();
 
-  if (!payload.ad?.trim()) return { hata: "Gemi adı zorunludur." };
+    const { error } = await supabase
+      .from("firma")
+      .update({ ad: payload.ad.trim(), notlar: payload.notlar ?? null })
+      .eq("id", id)
+      .eq("sirket_id", sirketId);
 
-  const { error } = await supabase.from("gemi").insert({
-    sirket_id: sirketId,
-    ad: payload.ad.trim(),
-    imo_no: payload.imo_no?.trim() || null,
-    notlar: payload.notlar?.trim() || null,
-    firma_id: payload.firma_id ?? null,
-  } as any);
+    if (error) return { basarili: false, hata: error.message };
 
-  if (error) return { hata: error.message };
-
-  revalidatePath("/cari");
-  return { basarili: true };
+    revalidatePath("/cari/firma");
+    return { basarili: true };
+  } catch (e) {
+    return { basarili: false, hata: String(e) };
+  }
 }
 
-/** Gemi güncelle */
-export async function gemiGuncelle(
-  gemiId: string,
-  payload: { ad?: string; imo_no?: string | null; notlar?: string | null; firma_id?: string | null }
-) {
-  const { supabase, sirketId } = await getAuthContext();
+/** Firma siler. Cascade: belge → odeme + belge_dosya otomatik silinir. */
+export async function firmaSil(id: string): Promise<ActionResult> {
+  try {
+    const sirketId = await getSirketId();
+    const supabase = await createClient();
 
-  const { error } = await supabase
-    .from("gemi")
-    .update({
-      ad: payload.ad?.trim(),
-      imo_no: payload.imo_no?.trim() || null,
-      notlar: payload.notlar?.trim() || null,
-      firma_id: payload.firma_id ?? null,
-      updated_at: new Date().toISOString(),
-    } as any)
-    .eq("id", gemiId)
-    .eq("sirket_id", sirketId);
+    const { error } = await supabase
+      .from("firma")
+      .delete()
+      .eq("id", id)
+      .eq("sirket_id", sirketId);
 
-  if (error) return { hata: error.message };
+    if (error) return { basarili: false, hata: error.message };
 
-  revalidatePath("/cari");
-  revalidatePath(`/cari/${gemiId}`);
-  return { basarili: true };
+    revalidatePath("/cari/firma");
+    revalidatePath("/cari");
+    return { basarili: true };
+  } catch (e) {
+    return { basarili: false, hata: String(e) };
+  }
 }
 
-/** Gemi sil (cascade: ilgili kişi, belge, ödeme) */
-export async function gemiSil(gemiId: string) {
-  const { supabase, sirketId } = await getAuthContext();
+// ═══════════════════════════════════════════════════════════════════════════════
+// BELGE
+// ═══════════════════════════════════════════════════════════════════════════════
 
-  const { error } = await supabase
-    .from("gemi")
-    .delete()
-    .eq("id", gemiId)
-    .eq("sirket_id", sirketId);
-
-  if (error) return { hata: error.message };
-
-  revalidatePath("/cari");
-  return { basarili: true };
-}
-
-// ══════════════════════════════════════════════
-// T-2.2 · İLGİLİ KİŞİ CRUD
-// ══════════════════════════════════════════════
-
-export async function ilgiliKisiListesiGetir(gemiId: string) {
-  const { supabase, sirketId } = await getAuthContext();
-
-  const { data, error } = await supabase
-    .from("ilgili_kisi")
-    .select("id, ad, iletisim, created_at")
-    .eq("gemi_id", gemiId)
-    .eq("sirket_id", sirketId)
-    .order("created_at", { ascending: false });
-
-  if (error) throw new Error(error.message);
-  return (data ?? []) as any[];
-}
-
-export async function ilgiliKisiEkle(payload: {
-  gemi_id: string;
-  ad: string;
-  iletisim?: string | null;
-}) {
-  const { supabase, sirketId } = await getAuthContext();
-
-  if (!payload.ad?.trim()) return { hata: "Kişi adı zorunludur." };
-
-  const { error } = await supabase.from("ilgili_kisi").insert({
-    sirket_id: sirketId,
-    gemi_id: payload.gemi_id,
-    ad: payload.ad.trim(),
-    iletisim: payload.iletisim?.trim() || null,
-  } as any);
-
-  if (error) return { hata: error.message };
-
-  revalidatePath(`/cari/${payload.gemi_id}`);
-  return { basarili: true };
-}
-
-export async function ilgiliKisiSil(kisiId: string, gemiId: string) {
-  const { supabase, sirketId } = await getAuthContext();
-
-  const { error } = await supabase
-    .from("ilgili_kisi")
-    .delete()
-    .eq("id", kisiId)
-    .eq("sirket_id", sirketId);
-
-  if (error) return { hata: error.message };
-
-  revalidatePath(`/cari/${gemiId}`);
-  return { basarili: true };
-}
-
-// ══════════════════════════════════════════════
-// T-2.3 · BELGE CRUD
-// ══════════════════════════════════════════════
-
-/** Belge listesi (gemi bazlı, ödeme durumu hesaplamalı) */
+/** Tüm belge listesini hesaplanmış ödeme durumu ve gecikme bilgisiyle döndürür. */
 export async function belgeListesiGetir(
-  gemiId: string,
-  tur?: "proforma" | "fatura"
-) {
-  const { supabase, sirketId } = await getAuthContext();
+  filtre?: BelgeListFiltre
+): Promise<BelgeListItem[]> {
+  const sirketId = await getSirketId();
+  const supabase = await createClient();
 
-  let query = supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query: any = supabase
     .from("belge")
-    .select(
-      `
-      id, tur, belge_no, tarih, toplam, iskonto, genel_toplam,
-      para_birimi, kdv_orani, notlar, pdf_url, created_at,
-      ilgili_kisi ( ad ),
-      cari_odeme ( tutar, baz_tutar )
-    `
-    )
-    .eq("gemi_id", gemiId)
-    .eq("sirket_id", sirketId)
-    .order("tarih", { ascending: false });
-
-  if (tur) query = query.eq("tur", tur);
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-
-  return (data ?? []).map((belge: any) => {
-    const odemeToplami = (belge.cari_odeme ?? []).reduce(
-      (s: number, o: any) => s + Number(o.baz_tutar ?? o.tutar ?? 0),
-      0
-    );
-    const genel = Number(belge.genel_toplam ?? 0);
-    const kalan = Math.max(0, genel - odemeToplami);
-    const durum =
-      genel <= 0
-        ? "odendi"
-        : odemeToplami <= 0
-        ? "odenmedi"
-        : odemeToplami >= genel
-        ? "odendi"
-        : "kismi";
-
-    return {
-      id: belge.id,
-      tur: belge.tur,
-      belge_no: belge.belge_no,
-      tarih: belge.tarih,
-      toplam: Number(belge.toplam),
-      iskonto: Number(belge.iskonto),
-      genel_toplam: genel,
-      para_birimi: belge.para_birimi as ParaBirimi,
-      kdv_orani: belge.kdv_orani,
-      notlar: belge.notlar,
-      pdf_url: belge.pdf_url,
-      created_at: belge.created_at,
-      ilgili_kisi_ad: belge.ilgili_kisi?.ad ?? null,
-      odeme_durumu: durum,
-      odenen_toplam: odemeToplami,
-      kalan,
-    };
-  });
-}
-
-/** Tüm belge listesi (ana sayfa — gemi veya firma bağlantılı) */
-export async function tumBelgeListesiGetir(filtre?: {
-  tur?: "proforma" | "fatura";
-  durum?: "odendi" | "kismi" | "odenmedi";
-  arama?: string;
-}) {
-  const { supabase, sirketId } = await getAuthContext();
-
-  let query = supabase
-    .from("belge")
-    .select(
-      `
-      id, tur, belge_no, tarih, toplam, iskonto, genel_toplam,
-      para_birimi, kdv_orani, notlar, created_at,
-      tek_gemi_adi, tek_firma_adi,
-      gemi ( id, ad ),
+    .select(`
+      id, tur, belge_no, tarih, aciklama, gemi_adi, tutar, para_birimi, kur, notlar,
+      firma_id, created_at, updated_at,
       firma ( id, ad ),
-      cari_odeme ( tutar, baz_tutar )
-    `
-    )
+      odeme ( tutar, kur )
+    `)
     .eq("sirket_id", sirketId)
     .order("tarih", { ascending: false });
+
+  // Yıl filtresi: 01.01.YYYY – 31.12.YYYY
+  if (filtre?.yil) {
+    query = query
+      .gte("tarih", `${filtre.yil}-01-01`)
+      .lte("tarih", `${filtre.yil}-12-31`);
+  }
 
   if (filtre?.tur) query = query.eq("tur", filtre.tur);
+  if (filtre?.firma_id === "__yok") {
+    query = query.is("firma_id", null);
+  } else if (filtre?.firma_id) {
+    query = query.eq("firma_id", filtre.firma_id);
+  }
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
 
-  const sonuc = (data ?? []).map((belge: any) => {
-    const odemeToplami = (belge.cari_odeme ?? []).reduce(
-      (s: number, o: any) => s + Number(o.baz_tutar ?? o.tutar ?? 0),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let sonuc: BelgeListItem[] = (data ?? []).map((b: any) => {
+    const odemeler: Odeme[] = (b.odeme ?? []).map((o: { tutar: number; kur: number }) => ({
+      id: "",
+      sirket_id: sirketId,
+      belge_id: b.id,
+      tarih: "",
+      tutar: Number(o.tutar),
+      para_birimi: "TRY" as ParaBirimi,
+      kur: Number(o.kur),
+      yontem: "banka" as const,
+      aciklama: null,
+      created_at: "",
+    }));
+
+    const odenenTl = odemeler.reduce(
+      (sum, o) => sum + odemeTlKarsiligi(o),
       0
     );
-    const genel = Number(belge.genel_toplam ?? 0);
-    const kalan = Math.max(0, genel - odemeToplami);
-    const durum =
-      genel <= 0
-        ? "odendi"
-        : odemeToplami <= 0
-        ? "odenmedi"
-        : odemeToplami >= genel
-        ? "odendi"
-        : "kismi";
+    const belgeTlTutar = Number(b.tutar) * Number(b.kur);
+    const kalan = kalanHesapla(belgeTlTutar, odenenTl);
+    const durum = calcOdemeDurumu(belgeTlTutar, odenenTl);
 
     return {
-      id: belge.id,
-      tur: belge.tur,
-      belge_no: belge.belge_no,
-      tarih: belge.tarih,
-      toplam: Number(belge.toplam),
-      iskonto: Number(belge.iskonto),
-      genel_toplam: genel,
-      para_birimi: belge.para_birimi as ParaBirimi,
-      kdv_orani: belge.kdv_orani,
-      notlar: belge.notlar,
-      created_at: belge.created_at,
-      // Bağlantı: gemi, firma veya tek seferlik isim
-      gemi_id: belge.gemi?.id ?? null,
-      gemi_ad: belge.gemi?.ad ?? belge.tek_gemi_adi ?? null,
-      firma_id: belge.firma?.id ?? null,
-      firma_ad: belge.firma?.ad ?? belge.tek_firma_adi ?? null,
-      tek_gemi_adi: belge.tek_gemi_adi ?? null,
-      tek_firma_adi: belge.tek_firma_adi ?? null,
-      odeme_durumu: durum,
-      odenen_toplam: odemeToplami,
+      id: b.id,
+      sirket_id: sirketId,
+      firma_id: b.firma_id ?? null,
+      tur: b.tur,
+      belge_no: b.belge_no,
+      tarih: b.tarih,
+      aciklama: b.aciklama,
+      gemi_adi: b.gemi_adi ?? null,
+      tutar: Number(b.tutar),
+      para_birimi: b.para_birimi as ParaBirimi,
+      kur: Number(b.kur),
+      notlar: b.notlar ?? null,
+      created_at: b.created_at,
+      updated_at: b.updated_at,
+      firma_ad: b.firma?.ad ?? null,
+      odenen_toplam_tl: odenenTl,
       kalan,
+      odeme_durumu: durum,
+      gecikmiş: isGecikmiş(b.tarih, durum),
     };
   });
 
-  // Durum filtresi (DB'de hesaplanamaz, client'ta filtrele)
+  // İstemci tarafı filtreler (arama & durum)
   if (filtre?.durum) {
-    return sonuc.filter((b) => b.odeme_durumu === filtre.durum);
+    sonuc = sonuc.filter((b) => b.odeme_durumu === filtre.durum);
   }
-  // Arama filtresi
   if (filtre?.arama) {
     const q = filtre.arama.toLowerCase();
-    return sonuc.filter(
+    sonuc = sonuc.filter(
       (b) =>
         b.belge_no.toLowerCase().includes(q) ||
-        (b.gemi_ad ?? "").toLowerCase().includes(q) ||
-        (b.firma_ad ?? "").toLowerCase().includes(q)
+        b.aciklama.toLowerCase().includes(q) ||
+        (b.firma_ad ?? "").toLowerCase().includes(q) ||
+        (b.gemi_adi ?? "").toLowerCase().includes(q)
     );
   }
+
   return sonuc;
 }
 
-/** Belge detayı (kalemler dahil) */
-export async function belgeDetayGetir(belgeId: string) {
-  const { supabase, sirketId } = await getAuthContext();
+/** Belge detayını ödemeler ve dosyalarla birlikte döndürür. */
+export async function belgeDetayGetir(belgeId: string): Promise<BelgeDetay> {
+  const sirketId = await getSirketId();
+  const supabase = await createClient();
 
-  const { data, error } = await supabase
+  const { data: b, error } = await supabase
     .from("belge")
-    .select(
-      `
-      *,
-      ilgili_kisi ( id, ad, iletisim ),
-      gemi ( id, ad, imo_no ),
-      cari_odeme ( id, tutar, para_birimi, tarih, yontem, dekont_url, aciklama )
-    `
-    )
+    .select(`
+      id, tur, belge_no, tarih, aciklama, gemi_adi, tutar, para_birimi, kur, notlar,
+      firma_id, created_at, updated_at,
+      firma ( id, ad, notlar ),
+      odeme ( id, belge_id, sirket_id, tarih, tutar, para_birimi, kur, yontem, aciklama, created_at ),
+      belge_dosya ( id, belge_id, sirket_id, dosya_url, dosya_adi, dosya_tipi, boyut_byte, created_at )
+    `)
     .eq("id", belgeId)
     .eq("sirket_id", sirketId)
     .single();
 
   if (error) throw new Error(error.message);
-  return data as any;
-}
 
-/** Belge ekle */
-export async function belgeEkle(payload: {
-  gemi_id?: string | null;
-  firma_id?: string | null;
-  tek_gemi_adi?: string | null;
-  tek_firma_adi?: string | null;
-  tur: "proforma" | "fatura";
-  belge_no: string;
-  tarih: string;
-  para_birimi: ParaBirimi;
-  kalemler: BelgeKalem[];
-  iskonto?: number;
-  kdv_orani?: number | null;
-  ilgili_kisi_id?: string | null;
-  notlar?: string | null;
-  pdf_url?: string | null;
-}) {
-  const { supabase, sirketId } = await getAuthContext();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const odemeler: Odeme[] = (b as any).odeme ?? [];
+  const odenenTl = odemeler.reduce(
+    (sum: number, o: Odeme) => sum + odemeTlKarsiligi(o),
+    0
+  );
+  const belgeTlTutar = Number(b.tutar) * Number(b.kur);
+  const kalan = kalanHesapla(belgeTlTutar, odenenTl);
+  const durum = calcOdemeDurumu(belgeTlTutar, odenenTl);
 
-  const baglantıVar =
-    payload.gemi_id || payload.firma_id ||
-    payload.tek_gemi_adi?.trim() || payload.tek_firma_adi?.trim();
-  if (!baglantıVar)
-    return { hata: "Gemi, firma veya tek seferlik isim zorunludur." };
-  if (!payload.belge_no?.trim()) return { hata: "Belge numarası zorunludur." };
-  if (!payload.tarih) return { hata: "Tarih zorunludur." };
-  if (!payload.kalemler?.length) return { hata: "En az bir kalem giriniz." };
-
-  const toplam = hesaplaToplam(payload.kalemler);
-  const iskonto = payload.iskonto ?? 0;
-  const genel_toplam = hesaplaGenelToplam(toplam, iskonto, payload.kdv_orani ?? null);
-  const kalemlerTemiz = payload.kalemler.map(({ id: _id, ...rest }) => rest);
-
-  const { data, error } = await supabase
-    .from("belge")
-    .insert({
-      sirket_id: sirketId,
-      gemi_id: payload.gemi_id ?? null,
-      firma_id: payload.firma_id ?? null,
-      tek_gemi_adi: payload.tek_gemi_adi?.trim() || null,
-      tek_firma_adi: payload.tek_firma_adi?.trim() || null,
-      tur: payload.tur,
-      belge_no: payload.belge_no.trim(),
-      tarih: payload.tarih,
-      para_birimi: payload.para_birimi,
-      kalemler: kalemlerTemiz as any,
-      toplam,
-      iskonto,
-      genel_toplam,
-      kdv_orani: payload.kdv_orani ?? null,
-      ilgili_kisi_id: payload.ilgili_kisi_id ?? null,
-      notlar: payload.notlar?.trim() || null,
-      pdf_url: payload.pdf_url ?? null,
-    } as any)
-    .select("id")
-    .single();
-
-  if (error) return { hata: error.message };
-
-  revalidatePath("/cari");
-  if (payload.gemi_id) revalidatePath(`/cari/gemiler/${payload.gemi_id}`);
-  return { basarili: true, belgeId: data.id };
-}
-
-/** Belge güncelle */
-export async function belgeGuncelle(
-  belgeId: string,
-  payload: {
-    gemi_id?: string | null;
-    firma_id?: string | null;
-    tek_gemi_adi?: string | null;
-    tek_firma_adi?: string | null;
-    belge_no?: string;
-    tarih?: string;
-    para_birimi?: ParaBirimi;
-    kalemler?: BelgeKalem[];
-    iskonto?: number;
-    kdv_orani?: number | null;
-    ilgili_kisi_id?: string | null;
-    notlar?: string | null;
-    pdf_url?: string | null;
-  }
-) {
-  const { supabase, sirketId } = await getAuthContext();
-
-  const updateData: Record<string, any> = {
-    updated_at: new Date().toISOString(),
-  };
-
-  if (payload.gemi_id !== undefined) updateData.gemi_id = payload.gemi_id ?? null;
-  if (payload.firma_id !== undefined) updateData.firma_id = payload.firma_id ?? null;
-  if (payload.tek_gemi_adi !== undefined) updateData.tek_gemi_adi = payload.tek_gemi_adi?.trim() || null;
-  if (payload.tek_firma_adi !== undefined) updateData.tek_firma_adi = payload.tek_firma_adi?.trim() || null;
-
-  if (payload.belge_no) updateData.belge_no = payload.belge_no.trim();
-  if (payload.tarih) updateData.tarih = payload.tarih;
-  if (payload.para_birimi) updateData.para_birimi = payload.para_birimi;
-  if (payload.kdv_orani !== undefined) updateData.kdv_orani = payload.kdv_orani;
-  if (payload.ilgili_kisi_id !== undefined)
-    updateData.ilgili_kisi_id = payload.ilgili_kisi_id;
-  if (payload.notlar !== undefined)
-    updateData.notlar = payload.notlar?.trim() || null;
-  if (payload.pdf_url !== undefined) updateData.pdf_url = payload.pdf_url;
-
-  if (payload.kalemler) {
-    const kalemlerTemiz = payload.kalemler.map(({ id: _id, ...rest }) => rest);
-    const toplam = hesaplaToplam(payload.kalemler);
-    const iskonto = payload.iskonto ?? 0;
-    const kdv = payload.kdv_orani !== undefined ? payload.kdv_orani : updateData.kdv_orani;
-    updateData.kalemler = kalemlerTemiz;
-    updateData.toplam = toplam;
-    updateData.iskonto = iskonto;
-    updateData.genel_toplam = hesaplaGenelToplam(toplam, iskonto, kdv);
-  } else if (payload.iskonto !== undefined || payload.kdv_orani !== undefined) {
-    // Sadece iskonto veya KDV değişmişse, mevcut toplam üzerinden hesapla
-    const { data: mevcut } = await supabase
-      .from("belge")
-      .select("toplam, kdv_orani")
-      .eq("id", belgeId)
-      .single();
-    if (mevcut) {
-      const mevcutKdv = payload.kdv_orani !== undefined
-        ? payload.kdv_orani
-        : Number((mevcut as any).kdv_orani ?? 0);
-      if (payload.iskonto !== undefined) updateData.iskonto = payload.iskonto;
-      updateData.genel_toplam = hesaplaGenelToplam(
-        Number((mevcut as any).toplam),
-        payload.iskonto ?? 0,
-        mevcutKdv
-      );
-    }
-  }
-
-  const { error } = await supabase
-    .from("belge")
-    .update(updateData as any)
-    .eq("id", belgeId)
-    .eq("sirket_id", sirketId);
-
-  if (error) return { hata: error.message };
-
-  revalidatePath("/cari");
-  return { basarili: true };
-}
-
-/** Belge sil */
-export async function belgeSil(belgeId: string, gemiId?: string | null) {
-  const { supabase, sirketId } = await getAuthContext();
-
-  const { error } = await supabase
-    .from("belge")
-    .delete()
-    .eq("id", belgeId)
-    .eq("sirket_id", sirketId);
-
-  if (error) return { hata: error.message };
-
-  revalidatePath("/cari");
-  if (gemiId) revalidatePath(`/cari/gemiler/${gemiId}`);
-  return { basarili: true };
-}
-
-// ══════════════════════════════════════════════
-// T-2.4 · ÖDEME CRUD
-// ══════════════════════════════════════════════
-
-export async function odemeListesiGetir(belgeId: string) {
-  const { supabase, sirketId } = await getAuthContext();
-
-  const { data, error } = await supabase
-    .from("cari_odeme")
-    .select("id, tarih, tutar, para_birimi, kur, baz_tutar, baz_para_birimi, yontem, dekont_url, aciklama, created_at")
-    .eq("belge_id", belgeId)
-    .eq("sirket_id", sirketId)
-    .order("tarih", { ascending: false });
-
-  if (error) throw new Error(error.message);
-  return (data ?? []) as any[];
-}
-
-export async function odemeEkle(payload: {
-  belge_id: string;
-  gemi_id?: string | null;
-  tarih: string;
-  tutar: number;
-  para_birimi: ParaBirimi;
-  yontem: "banka" | "elden";
-  /** Kur (opsiyonel) — farklı para biriminde ödemede manuel kur girilir */
-  kur?: number | null;
-  /** Kur × tutar = baz_tutar (belge para birimindeki karşılık) */
-  baz_tutar?: number | null;
-  /** Belgenin para birimi */
-  baz_para_birimi?: ParaBirimi | null;
-  dekont_url?: string | null;
-  aciklama?: string | null;
-}) {
-  const { supabase, sirketId } = await getAuthContext();
-
-  if (!payload.tarih) return { hata: "Tarih zorunludur." };
-  if (!payload.tutar || payload.tutar <= 0)
-    return { hata: "Tutar sıfırdan büyük olmalıdır." };
-  if (payload.kur !== undefined && payload.kur !== null && payload.kur <= 0)
-    return { hata: "Kur sıfırdan büyük olmalıdır." };
-
-  const { error } = await supabase.from("cari_odeme").insert({
+  return {
+    id: b.id,
     sirket_id: sirketId,
-    belge_id: payload.belge_id,
-    tarih: payload.tarih,
-    tutar: payload.tutar,
-    para_birimi: payload.para_birimi,
-    kur: payload.kur ?? null,
-    baz_tutar: payload.baz_tutar ?? null,
-    baz_para_birimi: payload.baz_para_birimi ?? null,
-    yontem: payload.yontem,
-    dekont_url: payload.dekont_url ?? null,
-    aciklama: payload.aciklama?.trim() || null,
-  } as any);
-
-  if (error) return { hata: error.message };
-
-  revalidatePath("/cari");
-  if (payload.gemi_id) revalidatePath(`/cari/gemiler/${payload.gemi_id}`);
-  return { basarili: true };
+    firma_id: b.firma_id ?? null,
+    tur: b.tur as BelgeDetay["tur"],
+    belge_no: b.belge_no,
+    tarih: b.tarih,
+    aciklama: b.aciklama,
+    gemi_adi: (b as any).gemi_adi ?? null, // eslint-disable-line @typescript-eslint/no-explicit-any
+    tutar: Number(b.tutar),
+    para_birimi: b.para_birimi as ParaBirimi,
+    kur: Number(b.kur),
+    notlar: b.notlar ?? null,
+    created_at: b.created_at,
+    updated_at: b.updated_at,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    firma: (b as any).firma ?? null,
+    odenen_toplam_tl: odenenTl,
+    kalan,
+    odeme_durumu: durum,
+    gecikmiş: isGecikmiş(b.tarih, durum),
+    firma_ad: (b as any).firma?.ad ?? null, // eslint-disable-line @typescript-eslint/no-explicit-any
+    odemeler,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    dosyalar: (b as any).belge_dosya ?? [],
+  };
 }
 
-export async function odemeSil(odemeId: string, gemiId?: string | null) {
-  const { supabase, sirketId } = await getAuthContext();
-
-  const { error } = await supabase
-    .from("cari_odeme")
-    .delete()
-    .eq("id", odemeId)
-    .eq("sirket_id", sirketId);
-
-  if (error) return { hata: error.message };
-
-  revalidatePath("/cari");
-  if (gemiId) revalidatePath(`/cari/gemiler/${gemiId}`);
-  return { basarili: true };
-}
-
-// ══════════════════════════════════════════════
-// T-2.5 · ÖZET & KPI QUERIES
-// ══════════════════════════════════════════════
-
-/** Para birimi bazlı KPI: toplam alacak / ödenen / kalan */
-export async function cariKpiGetir() {
-  const { supabase, sirketId } = await getAuthContext();
-
-  const { data: belgeler, error } = await supabase
-    .from("belge")
-    .select(`genel_toplam, para_birimi, cari_odeme ( tutar, baz_tutar )`)
-    .eq("sirket_id", sirketId);
-
-  if (error) throw new Error(error.message);
-
-  const kpi: Record<string, { toplam_alacak: number; odenen: number }> = {};
-
-  for (const b of belgeler ?? []) {
-    const pb = (b as any).para_birimi as string;
-    if (!kpi[pb]) kpi[pb] = { toplam_alacak: 0, odenen: 0 };
-    kpi[pb].toplam_alacak += Number((b as any).genel_toplam ?? 0);
-    // Çapraz kur: baz_tutar varsa belge PB cinsinden karşılığı kullan
-    kpi[pb].odenen += ((b as any).cari_odeme ?? []).reduce(
-      (s: number, o: any) => s + Number(o.baz_tutar ?? o.tutar ?? 0),
-      0
-    );
-  }
-
-  return (["TRY", "EUR", "USD"] as ParaBirimi[]).map((pb) => ({
-    para_birimi: pb,
-    toplam_alacak: kpi[pb]?.toplam_alacak ?? 0,
-    odenen: kpi[pb]?.odenen ?? 0,
-    odenmemis: Math.max(
-      0,
-      (kpi[pb]?.toplam_alacak ?? 0) - (kpi[pb]?.odenen ?? 0)
-    ),
-  }));
-}
-
-/** Cari genel tablo verisi (tüm belgeler, gemi + ödeme durumuyla) */
-export async function cariGenelGetir(paraBirimi?: ParaBirimi) {
-  const { supabase, sirketId } = await getAuthContext();
-
-  let query = supabase
-    .from("belge")
-    .select(
-      `
-      id, belge_no, tarih, genel_toplam, para_birimi, tur,
-      gemi ( id, ad ),
-      ilgili_kisi ( ad ),
-      cari_odeme ( tutar, baz_tutar )
-    `
-    )
-    .eq("sirket_id", sirketId)
-    .order("tarih", { ascending: false });
-
-  if (paraBirimi) query = query.eq("para_birimi", paraBirimi);
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-
-  return (data ?? []).map((b: any) => {
-    // Çapraz kur: baz_tutar varsa belge PB cinsinden karşılığı kullan
-    const odemeToplami = (b.cari_odeme ?? []).reduce(
-      (s: number, o: any) => s + Number(o.baz_tutar ?? o.tutar ?? 0),
-      0
-    );
-    const genel = Number(b.genel_toplam ?? 0);
-    const kalan = Math.max(0, genel - odemeToplami);
-    const durum =
-      genel <= 0
-        ? "odendi"
-        : odemeToplami <= 0
-        ? "odenmedi"
-        : odemeToplami >= genel
-        ? "odendi"
-        : "kismi";
-
-    return {
-      id: b.id,
-      belge_no: b.belge_no,
-      tarih: b.tarih,
-      tur: b.tur,
-      genel_toplam: genel,
-      para_birimi: b.para_birimi as ParaBirimi,
-      gemi_id: b.gemi?.id,
-      gemi_ad: b.gemi?.ad,
-      ilgili_kisi_ad: b.ilgili_kisi?.ad ?? null,
-      odeme_durumu: durum,
-      odenen_toplam: odemeToplami,
-      kalan,
-    };
-  });
-}
-
-/** Firma (ilgili kişi) bazlı özet */
-export async function firmaBazliGetir(ilgiliKisiId: string) {
-  const { supabase, sirketId } = await getAuthContext();
-
-  const { data, error } = await supabase
-    .from("belge")
-    .select(
-      `
-      id, belge_no, tarih, genel_toplam, para_birimi, tur,
-      gemi ( id, ad ),
-      cari_odeme ( tutar, baz_tutar )
-    `
-    )
-    .eq("sirket_id", sirketId)
-    .eq("ilgili_kisi_id", ilgiliKisiId)
-    .order("tarih", { ascending: false });
-
-  if (error) throw new Error(error.message);
-
-  return (data ?? []).map((b: any) => {
-    // Çapraz kur: baz_tutar varsa belge PB cinsinden karşılığı kullan
-    const odemeToplami = (b.cari_odeme ?? []).reduce(
-      (s: number, o: any) => s + Number(o.baz_tutar ?? o.tutar ?? 0),
-      0
-    );
-    const genel = Number(b.genel_toplam ?? 0);
-    return {
-      id: b.id,
-      belge_no: b.belge_no,
-      tarih: b.tarih,
-      tur: b.tur,
-      genel_toplam: genel,
-      para_birimi: b.para_birimi as ParaBirimi,
-      gemi_id: b.gemi?.id,
-      gemi_ad: b.gemi?.ad,
-      odenen_toplam: odemeToplami,
-      kalan: Math.max(0, genel - odemeToplami),
-    };
-  });
-}
-
-/** Sonraki belge numarası için sıra sayısını öner */
-export async function sonrakiBelgeNoGetir(tur: "proforma" | "fatura") {
-  const { supabase, sirketId } = await getAuthContext();
+/** Sıradaki belge numarasını döndürür (şirketteki toplam belge sayısı + 1). */
+export async function sonrakiBelgeNoGetir(
+  tur: "fatura" | "proforma" | "hesap_bilgisi"
+): Promise<number> {
+  const sirketId = await getSirketId();
+  const supabase = await createClient();
 
   const { count } = await supabase
     .from("belge")
@@ -784,113 +370,438 @@ export async function sonrakiBelgeNoGetir(tur: "proforma" | "fatura") {
   return (count ?? 0) + 1;
 }
 
-// ══════════════════════════════════════════════
-// FİRMA CRUD
-// ══════════════════════════════════════════════
+/** Yeni belge ekler. */
+export async function belgeEkle(
+  payload: BelgePayload
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const sirketId = await getSirketId();
+    const supabase = await createClient();
 
-export async function firmaListesiGetir() {
-  const { supabase, sirketId } = await getAuthContext();
+    const { data, error } = await supabase
+      .from("belge")
+      .insert({
+        sirket_id: sirketId,
+        firma_id: payload.firma_id ?? null,
+        tur: payload.tur,
+        belge_no: payload.belge_no.trim(),
+        tarih: payload.tarih,
+        aciklama: payload.aciklama.trim(),
+        gemi_adi: payload.gemi_adi?.trim() || null,
+        tutar: payload.tutar,
+        para_birimi: payload.para_birimi,
+        kur: payload.kur,
+        notlar: payload.notlar ?? null,
+      })
+      .select("id")
+      .single();
 
-  const { data, error } = await supabase
-    .from("firma")
-    .select("id, ad, vergi_no, adres, telefon, email, notlar, created_at")
-    .eq("sirket_id", sirketId)
-    .order("ad", { ascending: true });
+    if (error) return { basarili: false, hata: error.message };
 
-  if (error) throw new Error(error.message);
-  return (data ?? []) as any[];
-}
-
-export async function firmaDetayGetir(firmaId: string) {
-  const { supabase, sirketId } = await getAuthContext();
-
-  const { data, error } = await supabase
-    .from("firma")
-    .select("*, gemi ( id, ad, imo_no )")
-    .eq("id", firmaId)
-    .eq("sirket_id", sirketId)
-    .single();
-
-  if (error) throw new Error(error.message);
-  return data as any;
-}
-
-export async function firmaEkle(payload: {
-  ad: string;
-  vergi_no?: string | null;
-  adres?: string | null;
-  telefon?: string | null;
-  email?: string | null;
-  notlar?: string | null;
-}) {
-  const { supabase, sirketId } = await getAuthContext();
-
-  if (!payload.ad?.trim()) return { hata: "Firma adı zorunludur." };
-
-  const { data, error } = await supabase
-    .from("firma")
-    .insert({
-      sirket_id: sirketId,
-      ad: payload.ad.trim(),
-      vergi_no: payload.vergi_no?.trim() || null,
-      adres: payload.adres?.trim() || null,
-      telefon: payload.telefon?.trim() || null,
-      email: payload.email?.trim() || null,
-      notlar: payload.notlar?.trim() || null,
-    } as any)
-    .select("id")
-    .single();
-
-  if (error) return { hata: error.message };
-
-  revalidatePath("/cari");
-  return { basarili: true, firmaId: data.id };
-}
-
-export async function firmaGuncelle(
-  firmaId: string,
-  payload: {
-    ad?: string;
-    vergi_no?: string | null;
-    adres?: string | null;
-    telefon?: string | null;
-    email?: string | null;
-    notlar?: string | null;
+    revalidatePath("/cari");
+    return { basarili: true, veri: { id: data.id } };
+  } catch (e) {
+    return { basarili: false, hata: String(e) };
   }
-) {
-  const { supabase, sirketId } = await getAuthContext();
-
-  const { error } = await supabase
-    .from("firma")
-    .update({
-      ...(payload.ad !== undefined && { ad: payload.ad.trim() }),
-      vergi_no: payload.vergi_no?.trim() || null,
-      adres: payload.adres?.trim() || null,
-      telefon: payload.telefon?.trim() || null,
-      email: payload.email?.trim() || null,
-      notlar: payload.notlar?.trim() || null,
-      updated_at: new Date().toISOString(),
-    } as any)
-    .eq("id", firmaId)
-    .eq("sirket_id", sirketId);
-
-  if (error) return { hata: error.message };
-
-  revalidatePath("/cari");
-  return { basarili: true };
 }
 
-export async function firmaSil(firmaId: string) {
-  const { supabase, sirketId } = await getAuthContext();
+/** Belgeyi günceller. */
+export async function belgeGuncelle(
+  id: string,
+  payload: Partial<BelgePayload>
+): Promise<ActionResult> {
+  try {
+    const sirketId = await getSirketId();
+    const supabase = await createClient();
 
-  const { error } = await supabase
-    .from("firma")
-    .delete()
-    .eq("id", firmaId)
+    const { error } = await supabase
+      .from("belge")
+      .update({
+        ...payload,
+        belge_no: payload.belge_no?.trim(),
+        aciklama: payload.aciklama?.trim(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("sirket_id", sirketId);
+
+    if (error) return { basarili: false, hata: error.message };
+
+    revalidatePath("/cari");
+    revalidatePath(`/cari/belge/${id}`);
+    return { basarili: true };
+  } catch (e) {
+    return { basarili: false, hata: String(e) };
+  }
+}
+
+/** Belgenin sadece notlar alanını günceller (detay tab'ından inline güncelleme). */
+export async function belgeNotlarGuncelle(
+  id: string,
+  notlar: string | null
+): Promise<ActionResult> {
+  try {
+    const sirketId = await getSirketId();
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from("belge")
+      .update({ notlar, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("sirket_id", sirketId);
+
+    if (error) return { basarili: false, hata: error.message };
+
+    revalidatePath(`/cari/belge/${id}`);
+    return { basarili: true };
+  } catch (e) {
+    return { basarili: false, hata: String(e) };
+  }
+}
+
+/** Belgeyi siler. Cascade: odeme + belge_dosya otomatik silinir. */
+export async function belgeSil(id: string): Promise<ActionResult> {
+  try {
+    const sirketId = await getSirketId();
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from("belge")
+      .delete()
+      .eq("id", id)
+      .eq("sirket_id", sirketId);
+
+    if (error) return { basarili: false, hata: error.message };
+
+    revalidatePath("/cari");
+    return { basarili: true };
+  } catch (e) {
+    return { basarili: false, hata: String(e) };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ÖDEME
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Belgeye ödeme ekler. */
+export async function odemeEkle(
+  payload: OdemePayload
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const sirketId = await getSirketId();
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from("odeme")
+      .insert({
+        sirket_id: sirketId,
+        belge_id: payload.belge_id,
+        tarih: payload.tarih,
+        tutar: payload.tutar,
+        para_birimi: payload.para_birimi,
+        kur: payload.kur,
+        yontem: payload.yontem,
+        aciklama: payload.aciklama ?? null,
+      })
+      .select("id")
+      .single();
+
+    if (error) return { basarili: false, hata: error.message };
+
+    revalidatePath(`/cari/belge/${payload.belge_id}`);
+    revalidatePath("/cari");
+    return { basarili: true, veri: { id: data.id } };
+  } catch (e) {
+    return { basarili: false, hata: String(e) };
+  }
+}
+
+/** Ödemeyi siler. */
+export async function odemeSil(
+  odemeId: string,
+  belgeId: string
+): Promise<ActionResult> {
+  try {
+    const sirketId = await getSirketId();
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from("odeme")
+      .delete()
+      .eq("id", odemeId)
+      .eq("sirket_id", sirketId);
+
+    if (error) return { basarili: false, hata: error.message };
+
+    revalidatePath(`/cari/belge/${belgeId}`);
+    revalidatePath("/cari");
+    return { basarili: true };
+  } catch (e) {
+    return { basarili: false, hata: String(e) };
+  }
+}
+
+/**
+ * Toplu ödeme: Seçili birden fazla belgeye ayrı ayrı ödeme kaydeder.
+ * Her belge için ayrı tutar belirtilebilir; ortak tarih/yöntem kullanılır.
+ */
+export async function topluOdemeEkle(
+  payload: TopluOdemePayload
+): Promise<ActionResult<{ count: number }>> {
+  try {
+    const sirketId = await getSirketId();
+    const supabase = await createClient();
+
+    const rows = payload.kalemler.map((k) => ({
+      sirket_id: sirketId,
+      belge_id: k.belge_id,
+      tarih: payload.tarih,
+      tutar: k.tutar,
+      para_birimi: payload.para_birimi,
+      kur: payload.kur,
+      yontem: payload.yontem,
+      aciklama: payload.aciklama ?? null,
+    }));
+
+    const { error } = await supabase.from("odeme").insert(rows);
+    if (error) return { basarili: false, hata: error.message };
+
+    revalidatePath("/cari");
+    return { basarili: true, veri: { count: rows.length } };
+  } catch (e) {
+    return { basarili: false, hata: String(e) };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOSYA
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Belgeye dosya kaydı ekler (URL zaten yüklenmiş olmalı). */
+export async function belgeDosyaEkle(
+  payload: DosyaPayload
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const sirketId = await getSirketId();
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from("belge_dosya")
+      .insert({
+        sirket_id: sirketId,
+        belge_id: payload.belge_id,
+        dosya_url: payload.dosya_url,
+        dosya_adi: payload.dosya_adi,
+        dosya_tipi: payload.dosya_tipi,
+        boyut_byte: payload.boyut_byte ?? null,
+      })
+      .select("id")
+      .single();
+
+    if (error) return { basarili: false, hata: error.message };
+
+    revalidatePath(`/cari/belge/${payload.belge_id}`);
+    return { basarili: true, veri: { id: data.id } };
+  } catch (e) {
+    return { basarili: false, hata: String(e) };
+  }
+}
+
+/** Dosya kaydını siler. */
+export async function belgeDosyaSil(
+  dosyaId: string,
+  belgeId: string
+): Promise<ActionResult> {
+  try {
+    const sirketId = await getSirketId();
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from("belge_dosya")
+      .delete()
+      .eq("id", dosyaId)
+      .eq("sirket_id", sirketId);
+
+    if (error) return { basarili: false, hata: error.message };
+
+    revalidatePath(`/cari/belge/${belgeId}`);
+    return { basarili: true };
+  } catch (e) {
+    return { basarili: false, hata: String(e) };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// KPI
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** KPI verisi: Her para birimi için toplam alacak, ödenen, ödenmeyen. */
+export async function cariKpiGetir(yil?: number): Promise<CariKpi[]> {
+  const sirketId = await getSirketId();
+  const supabase = await createClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query: any = supabase
+    .from("belge")
+    .select(`
+      tutar, kur, para_birimi,
+      odeme ( tutar, kur )
+    `)
     .eq("sirket_id", sirketId);
 
-  if (error) return { hata: error.message };
+  // Yıl filtresi
+  if (yil) {
+    query = query
+      .gte("tarih", `${yil}-01-01`)
+      .lte("tarih", `${yil}-12-31`);
+  }
 
-  revalidatePath("/cari");
-  return { basarili: true };
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  const PB_LIST: ParaBirimi[] = ["TRY", "EUR", "USD"];
+  const kpi: Record<ParaBirimi, { alacak: number; odenen: number }> = {
+    TRY: { alacak: 0, odenen: 0 },
+    EUR: { alacak: 0, odenen: 0 },
+    USD: { alacak: 0, odenen: 0 },
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const b of (data ?? []) as any[]) {
+    const pb = b.para_birimi as ParaBirimi;
+    const belgeKur = Math.max(Number(b.kur), 0.0001); // sıfıra bölmeyi önle
+
+    // Alacak: belgenin kendi para biriminde (örn. EUR belgede EUR tutar)
+    kpi[pb].alacak += Number(b.tutar);
+
+    // Ödenen: ödemelerin TL karşılığını belge kuruna bölerek orijinal PB'ye çevir
+    for (const o of b.odeme ?? []) {
+      const odemeTl = Number(o.tutar) * Number(o.kur);
+      kpi[pb].odenen += odemeTl / belgeKur;
+    }
+  }
+
+  return PB_LIST.map((pb) => ({
+    para_birimi: pb,
+    toplam_alacak: kpi[pb].alacak,
+    odenen: kpi[pb].odenen,
+    odenmemis: Math.max(0, kpi[pb].alacak - kpi[pb].odenen),
+  }));
 }
+
+// ─── Toplu Import ─────────────────────────────────────────────────────────────
+
+export interface ImportSatir {
+  belge_no: string;
+  tarih: string;           // YYYY-MM-DD
+  vade_tarihi?: string;    // YYYY-MM-DD (opsiyonel, notlara yazılır)
+  tur: string;             // fatura | proforma | hesap_bilgisi
+  firma_adi?: string;
+  gemi_adi?: string;       // Opsiyonel gemi adı
+  tutar: number;
+  para_birimi: string;     // TRY | EUR | USD
+  kur: number;
+  aciklama?: string;
+}
+
+export interface ImportSonuc {
+  basarili: number;
+  hatali: number;
+  hatalar: { satir: number; mesaj: string }[];
+}
+
+export async function belgeBulkImport(
+  satirlar: ImportSatir[]
+): Promise<ActionResult<ImportSonuc>> {
+  try {
+    const sirketId = await getSirketId();
+    const supabase = await createClient();
+
+    // Tüm firmaları çek — adı ID'ye map et
+    const { data: firmalar } = await supabase
+      .from("firma")
+      .select("id, ad")
+      .eq("sirket_id", sirketId);
+
+    const firmaMap = new Map<string, string>(
+      (firmalar ?? []).map((f) => [f.ad.trim().toLowerCase(), f.id])
+    );
+
+    const gecerliTurler = ["fatura", "proforma", "hesap_bilgisi"] as const;
+    const gecerliPB = ["TRY", "EUR", "USD"] as const;
+
+    let basarili = 0;
+    const hatalar: { satir: number; mesaj: string }[] = [];
+
+    for (let i = 0; i < satirlar.length; i++) {
+      const s = satirlar[i];
+      const satirNo = i + 2; // Excel'de 1. satır başlık, 2'den başlar
+
+      // Validasyon
+      if (!s.belge_no?.trim()) {
+        hatalar.push({ satir: satirNo, mesaj: "Belge No boş olamaz" });
+        continue;
+      }
+      if (!s.tarih || !/^\d{4}-\d{2}-\d{2}$/.test(s.tarih)) {
+        hatalar.push({ satir: satirNo, mesaj: `Geçersiz tarih: ${s.tarih}` });
+        continue;
+      }
+      if (!gecerliTurler.includes(s.tur as (typeof gecerliTurler)[number])) {
+        hatalar.push({ satir: satirNo, mesaj: `Geçersiz tür: ${s.tur}` });
+        continue;
+      }
+      if (typeof s.tutar !== "number" || s.tutar <= 0) {
+        hatalar.push({ satir: satirNo, mesaj: `Geçersiz tutar: ${s.tutar}` });
+        continue;
+      }
+      if (!gecerliPB.includes(s.para_birimi as (typeof gecerliPB)[number])) {
+        hatalar.push({ satir: satirNo, mesaj: `Geçersiz para birimi: ${s.para_birimi}` });
+        continue;
+      }
+      if (typeof s.kur !== "number" || s.kur <= 0) {
+        hatalar.push({ satir: satirNo, mesaj: `Geçersiz kur: ${s.kur}` });
+        continue;
+      }
+
+      // Firma eşleştirme
+      const firmaId = s.firma_adi
+        ? (firmaMap.get(s.firma_adi.trim().toLowerCase()) ?? null)
+        : null;
+
+      // Vade tarihi varsa notlara ekle
+      const notlar = s.vade_tarihi
+        ? `Vade: ${s.vade_tarihi}`
+        : null;
+
+      const { error } = await supabase.from("belge").insert({
+        sirket_id: sirketId,
+        firma_id: firmaId,
+        tur: s.tur,
+        belge_no: s.belge_no.trim(),
+        tarih: s.tarih,
+        aciklama: s.aciklama?.trim() ?? "",
+        gemi_adi: s.gemi_adi?.trim() || null,
+        tutar: s.tutar,
+        para_birimi: s.para_birimi,
+        kur: s.kur,
+        notlar,
+      });
+
+      if (error) {
+        hatalar.push({ satir: satirNo, mesaj: error.message });
+      } else {
+        basarili++;
+      }
+    }
+
+    revalidatePath("/cari");
+    return {
+      basarili: true,
+      veri: { basarili, hatali: hatalar.length, hatalar },
+    };
+  } catch (e) {
+    return { basarili: false, hata: String(e) };
+  }
+}
+

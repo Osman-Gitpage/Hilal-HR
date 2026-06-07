@@ -249,7 +249,7 @@ export default async function DashboardPage() {
 
   const { data: belgeTarihce } = await supabase
     .from("belge")
-    .select("tarih, tur, genel_toplam, para_birimi")
+    .select("tarih, tur, tutar, kur, para_birimi")
     .eq("sirket_id", sirketId ?? "")
     .gte("tarih", altinAltiAyString);
 
@@ -260,13 +260,14 @@ export default async function DashboardPage() {
       return d.getFullYear() === m.yil && (d.getMonth() + 1) === m.ay;
     });
 
+    // Yeni şemada gelir/gider ayrımı yok — faturaları gelir, proformaları nötr say
     const gelir = filtered
-      .filter((b) => b.tur === "gelir")
-      .reduce((sum, b) => sum + unifyToTRY(Number(b.genel_toplam ?? 0), b.para_birimi), 0);
+      .filter((b) => b.tur === "fatura" || b.tur === "hesap_bilgisi")
+      .reduce((sum, b) => sum + unifyToTRY(Number(b.tutar ?? 0) * Number(b.kur ?? 1), b.para_birimi), 0);
 
     const gider = filtered
-      .filter((b) => b.tur === "gider")
-      .reduce((sum, b) => sum + unifyToTRY(Number(b.genel_toplam ?? 0), b.para_birimi), 0);
+      .filter((b) => b.tur === "proforma")
+      .reduce((sum, b) => sum + unifyToTRY(Number(b.tutar ?? 0) * Number(b.kur ?? 1), b.para_birimi), 0);
 
     return {
       donem: m.etiket,

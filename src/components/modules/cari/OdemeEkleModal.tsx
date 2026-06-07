@@ -1,158 +1,117 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import * as React from "react";
 import { toast } from "sonner";
-import { Loader2, AlertCircle } from "lucide-react";
+import { CreditCard, Loader2, X } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { odemeEkle } from "@/app/actions/cari";
-import { useInvalidateCari } from "@/hooks/useCari";
-import type { ParaBirimi } from "@/types";
 
-interface Props {
-  belgeId: string | null;
-  gemiId?: string | null;
-  /** Belgenin kendi para birimi — çapraz kur tespiti için */
-  belgePb?: ParaBirimi;
-  onClose: () => void;
+import { useOdemeEkle } from "@/hooks/useCari";
+import { bugunYYYYMMDD } from "@/lib/cari";
+import type { ParaBirimi, OdemeYontem, OdemePayload } from "@/types/cari";
+
+interface OdemeEkleModalProps {
+  belgeId: string;
+  kalanTutar: number;
+  belgePb: ParaBirimi;
+  acik: boolean;
+  onKapat: () => void;
 }
 
-export function OdemeEkleModal({ belgeId, gemiId, belgePb, onClose }: Props) {
-  const [pb, setPb] = useState<ParaBirimi>(belgePb ?? "USD");
-  const [yontem, setYontem] = useState<"banka" | "elden">("banka");
-  const [kur, setKur] = useState<string>("");
-  const [tutar, setTutar] = useState<string>("");
-  const [isPending, startTransition] = useTransition();
-  const {
-    invalidateBelgeList, invalidateOdemeList, invalidateKpi, invalidateGenel, invalidateTumBelgeList,
-  } = useInvalidateCari();
+export function OdemeEkleModal({
+  belgeId,
+  kalanTutar,
+  belgePb,
+  acik,
+  onKapat,
+}: OdemeEkleModalProps) {
+  const { mutateAsync: odemeEkle, isPending } = useOdemeEkle();
 
-  // belgePb değişince ödeme pb'yi sıfırla
-  useEffect(() => {
-    if (belgePb) setPb(belgePb);
-  }, [belgePb]);
+  const [tarih, setTarih] = React.useState(bugunYYYYMMDD());
+  // kalanTutar TL cinsinden gelir; TRY belgeler için doğrudan kullan,
+  // dövizli belgeler için kullanıcı kendi tutarını girsin (TL karışıklığını önler)
+  const [tutar, setTutar] = React.useState(
+    belgePb === "TRY" ? kalanTutar.toFixed(2) : ""
+  );
+  const [paraBirimi, setParaBirimi] = React.useState<ParaBirimi>(belgePb);
+  const [kur, setKur] = React.useState("1");
+  const [yontem, setYontem] = React.useState<OdemeYontem>("banka");
+  const [aciklama, setAciklama] = React.useState("");
 
-  // Çapraz kur gerekiyor mu?
-  const kurGerekli = belgePb && pb !== belgePb;
-
-  // Canlı baz_tutar önizleme
-  const bazTutarOnizleme =
-    kurGerekli && Number(kur) > 0 && Number(tutar) > 0
-      ? Math.round(Number(tutar) * Number(kur) * 100) / 100
-      : null;
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!belgeId) return;
-    const fd = new FormData(e.currentTarget);
-    const tutarVal = Number(tutar);
-    const tarih = fd.get("tarih") as string;
-    const aciklama = (fd.get("aciklama") as string).trim() || null;
-    const kurVal = kur ? Number(kur) : null;
 
-    if (kurGerekli && (!kurVal || kurVal <= 0)) {
-      toast.error("Farklı para birimi seçildi — kur girilmesi zorunludur.");
+    const parsedTutar = parseFloat(tutar);
+    if (!parsedTutar || parsedTutar <= 0) {
+      toast.error("Geçerli bir tutar giriniz.");
       return;
     }
 
-    const bazTutar = kurGerekli && kurVal ? Math.round(tutarVal * kurVal * 100) / 100 : null;
+    const payload: OdemePayload = {
+      belge_id: belgeId,
+      tarih,
+      tutar: parsedTutar,
+      para_birimi: paraBirimi,
+      kur: parseFloat(kur) || 1,
+      yontem,
+      aciklama: aciklama.trim() || null,
+    };
 
-    startTransition(async () => {
-      const res = await odemeEkle({
-        belge_id: belgeId,
-        gemi_id: gemiId ?? null,
-        tarih,
-        tutar: tutarVal,
-        para_birimi: pb,
-        yontem,
-        kur: kurVal,
-        baz_tutar: bazTutar,
-        baz_para_birimi: kurGerekli ? belgePb : null,
-        aciklama,
-      });
-      if (res?.hata) {
-        toast.error(res.hata);
-        return;
-      }
-      toast.success("Ödeme kaydedildi.");
-      invalidateOdemeList(belgeId);
-      if (gemiId) invalidateBelgeList(gemiId);
-      invalidateTumBelgeList();
-      invalidateKpi();
-      invalidateGenel();
-      onClose();
-    });
-  }
+    const sonuc = await odemeEkle(payload);
+    if (!sonuc.basarili) {
+      toast.error(`Hata: ${sonuc.hata}`);
+      return;
+    }
+
+    toast.success("Ödeme eklendi.");
+    onKapat();
+  };
 
   return (
-    <Dialog open={!!belgeId} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md" id="dialog-odeme-ekle">
+    <Dialog open={acik} onOpenChange={(o) => !o && onKapat()}>
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Ödeme Ekle</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4 text-primary" />
+            Ödeme Ekle
+          </DialogTitle>
         </DialogHeader>
+
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Tarih + Yöntem */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="odeme-tarih">Tarih *</Label>
+              <Label htmlFor="odeme-tarih" className="text-xs font-semibold">Tarih</Label>
               <Input
                 id="odeme-tarih"
-                name="tarih"
                 type="date"
+                value={tarih}
+                onChange={(e) => setTarih(e.target.value)}
                 required
-                defaultValue={new Date().toISOString().split("T")[0]}
-                disabled={isPending}
+                className="h-9 text-sm"
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Ödeme Para Birimi</Label>
-              <Select
-                value={pb}
-                onValueChange={(v) => { if (v) { setPb(v as ParaBirimi); setKur(""); } }}
-              >
-                <SelectTrigger id="odeme-pb">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="TRY">TRY ₺</SelectItem>
-                  <SelectItem value="EUR">EUR €</SelectItem>
-                  <SelectItem value="USD">USD $</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="odeme-tutar">Tutar ({pb}) *</Label>
-              <Input
-                id="odeme-tutar"
-                name="tutar"
-                type="number"
-                step="0.01"
-                min="0.01"
-                required
-                placeholder="0.00"
-                value={tutar}
-                onChange={(e) => setTutar(e.target.value)}
-                disabled={isPending}
-                className="font-mono"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Ödeme Yöntemi</Label>
-              <Select
-                value={yontem}
-                onValueChange={(v) => { if (v) setYontem(v as "banka" | "elden"); }}
-              >
-                <SelectTrigger id="odeme-yontem">
+              <Label htmlFor="odeme-yontem" className="text-xs font-semibold">Yöntem</Label>
+              <Select value={yontem} onValueChange={(v) => setYontem(v as OdemeYontem)}>
+                <SelectTrigger id="odeme-yontem" className="h-9 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -163,60 +122,75 @@ export function OdemeEkleModal({ belgeId, gemiId, belgePb, onClose }: Props) {
             </div>
           </div>
 
-          {/* Kur — sadece çapraz ödeme durumunda göster */}
-          {kurGerekli && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3 space-y-3">
-              <div className="flex items-start gap-2 text-amber-700 dark:text-amber-400">
-                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                <p className="text-xs">
-                  Belge <strong>{belgePb}</strong> cinsinden, ancak ödeme{" "}
-                  <strong>{pb}</strong> olarak girildi. Dönüşüm kuru giriniz.
-                </p>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="odeme-kur">
-                  1 {pb} = ? {belgePb} (Kur) *
-                </Label>
-                <Input
-                  id="odeme-kur"
-                  type="number"
-                  step="0.0001"
-                  min="0.0001"
-                  placeholder={`ör. ${belgePb === "TRY" ? "50.00" : "1.08"}`}
-                  value={kur}
-                  onChange={(e) => setKur(e.target.value)}
-                  disabled={isPending}
-                  className="font-mono"
-                  required
-                />
-              </div>
-              {bazTutarOnizleme != null && (
-                <p className="text-xs font-mono font-semibold text-amber-700 dark:text-amber-400">
-                  = {belgePb} {bazTutarOnizleme.toLocaleString("tr-TR", { minimumFractionDigits: 2 })}
-                  <span className="text-muted-foreground font-normal ml-1">({tutar} × {kur})</span>
-                </p>
-              )}
+          {/* Tutar + PB + Kur */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-1 space-y-1.5">
+              <Label htmlFor="odeme-pb" className="text-xs font-semibold">Para Birimi</Label>
+              <Select value={paraBirimi} onValueChange={(v) => setParaBirimi(v as ParaBirimi)}>
+                <SelectTrigger id="odeme-pb" className="h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="TRY">TRY</SelectItem>
+                  <SelectItem value="EUR">EUR</SelectItem>
+                  <SelectItem value="USD">USD</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          )}
+            <div className="col-span-1 space-y-1.5">
+              <Label htmlFor="odeme-tutar" className="text-xs font-semibold">Tutar</Label>
+              <Input
+                id="odeme-tutar"
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={tutar}
+                onChange={(e) => setTutar(e.target.value)}
+                required
+                className="h-9 text-sm text-right tabular-nums"
+              />
+            </div>
+            <div className="col-span-1 space-y-1.5">
+              <Label htmlFor="odeme-kur" className="text-xs font-semibold">
+                Kur <span className="text-muted-foreground/60 font-normal text-[10px]">TL</span>
+              </Label>
+              <Input
+                id="odeme-kur"
+                type="number"
+                min="0.0001"
+                step="0.0001"
+                value={kur}
+                onChange={(e) => setKur(e.target.value)}
+                className="h-9 text-sm text-right tabular-nums"
+              />
+            </div>
+          </div>
 
+          {/* Açıklama */}
           <div className="space-y-1.5">
-            <Label htmlFor="odeme-aciklama">Açıklama</Label>
+            <Label htmlFor="odeme-aciklama" className="text-xs font-semibold">
+              Açıklama <span className="text-muted-foreground/60 font-normal">(isteğe bağlı)</span>
+            </Label>
             <Textarea
               id="odeme-aciklama"
-              name="aciklama"
-              rows={2}
-              placeholder="İsteğe bağlı..."
-              disabled={isPending}
+              placeholder="Dekont no, açıklama…"
+              value={aciklama}
+              onChange={(e) => setAciklama(e.target.value)}
+              className="text-sm resize-none h-16"
             />
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
+            <Button type="button" variant="ghost" onClick={onKapat} disabled={isPending}>
               İptal
             </Button>
-            <Button type="submit" disabled={isPending} id="btn-odeme-kaydet">
-              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Kaydet
+            <Button type="submit" disabled={isPending} className="gap-1.5">
+              {isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CreditCard className="h-3.5 w-3.5" />
+              )}
+              {isPending ? "Kaydediliyor…" : "Ödemeyi Kaydet"}
             </Button>
           </DialogFooter>
         </form>

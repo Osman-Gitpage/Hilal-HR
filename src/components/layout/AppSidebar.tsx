@@ -52,7 +52,6 @@ const NAV_ITEMS = [
     etiket: "Cari",
     ikon: Receipt,
     id: "nav-cari",
-    yakinsa: true,
   },
   {
     href: "/raporlar",

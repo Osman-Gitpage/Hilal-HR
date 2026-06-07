@@ -1,12 +1,10 @@
-import type { Metadata } from "next";
 import { BelgeFormView } from "@/components/modules/cari/BelgeFormView";
 
-export const metadata: Metadata = { title: "Belge Düzenle — Cari" };
-
-export default function BelgeDuzenlePage({
-  params,
-}: {
+interface Props {
   params: Promise<{ belgeId: string }>;
-}) {
-  return <BelgeFormView mod="duzenle" belgeIdPromise={params} />;
+}
+
+export default async function BelgeDuzenlemePage({ params }: Props) {
+  const { belgeId } = await params;
+  return <BelgeFormView belgeId={belgeId} />;
 }

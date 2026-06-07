@@ -43,3 +43,17 @@ export interface BordroNot {
   metin: string;
   [key: string]: string | number | boolean | null | undefined;
 }
+
+// ─── Cari Modülü Tablo Tipleri ────────────────────────────────────────────────
+export type Belge          = Tables<"belge">;
+export type BelgeDosyaRow  = Tables<"belge_dosya">;
+export type OdemeRow       = Tables<"odeme">;
+export type FirmaRow       = Tables<"firma">;
+
+export type BelgeInsert    = TablesInsert<"belge">;
+export type BelgeUpdate    = TablesUpdate<"belge">;
+export type OdemeInsert    = TablesInsert<"odeme">;
+export type OdemeUpdate    = TablesUpdate<"odeme">;
+export type BelgeDosyaInsert = TablesInsert<"belge_dosya">;
+export type FirmaInsert    = TablesInsert<"firma">;
+export type FirmaUpdate    = TablesUpdate<"firma">;

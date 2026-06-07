@@ -1,132 +1,108 @@
-# Cari / Fatura Modülü
+# Cari Modülü
 
 ## Main Info
 
 ### Tablolar
 
-**gemi**
+**firma**
 | Alan | Zorunlu | Notlar |
 |------|---------|--------|
 | id | * | uuid |
 | ad | * | |
-| imo_no | | opsiyonel |
-| sirket_id | * | FK → sirket |
 | notlar | | |
 
-**sirket**
-| Alan | Notlar |
-|------|--------|
-| id | |
-| ad | |
-| notlar | |
+**belge** (Fatura / Proforma / Hesap Bilgisi)
+| Alan | Zorunlu | Notlar |
+|------|---------|--------|
+| id | * | uuid |
+| tur | * | fatura / proforma / hesap_bilgisi |
+| belge_no | * | |
+| tarih | * | |
+| aciklama | * | |
+| tutar | * | |
+| para_birimi | * | TL / EUR / USD |
+| kur | * | |
+| firma_id | | FK → firma, opsiyonel |
+| notlar | | belgeye özel |
 
-**ilgili_kisi**
-| Alan | Notlar |
-|------|--------|
-| id | |
-| gemi_id | FK → gemi |
-| ad | |
-| iletisim | opsiyonel |
-
-**belge** (Proforma / Fatura)
-| Alan | Notlar |
-|------|--------|
-| id | |
-| gemi_id | FK → gemi |
-| tur | proforma / fatura |
-| belge_no | PTS AWB no veya Fatura no |
-| tarih | |
-| ilgili_kisi_id | null → proformada yok |
-| kalemler | JSON (açıklama, miktar, birim, birim_fiyat, iskonto) |
-| toplam | oh |
-| iskonto | |
-| genel_toplam | oh |
-| para_birimi | TL / EUR / USD |
-| kdv_orani | opsiyonel |
-| notlar | |
-| pdf_url | Supabase Storage |
-
-**odeme**
+**belge_dosya**
 | Alan | Notlar |
 |------|--------|
 | id | |
 | belge_id | FK → belge |
-| tarih | |
-| tutar | |
-| para_birimi | |
-| yontem | banka / elden |
-| dekont_url | Supabase Storage |
-| not | |
+| dosya_url | Backblaze B2 |
+| dosya_adi | |
+| dosya_tipi | PDF / Word |
+
+**odeme**
+| Alan | Zorunlu | Notlar |
+|------|---------|--------|
+| id | * | |
+| belge_id | * | FK → belge |
+| tarih | * | |
+| tutar | * | |
+| para_birimi | * | |
+| kur | * | |
+| yontem | * | banka / elden |
+| aciklama | | |
 
 ### Hesaplamalar
 
 ```
-belge.toplam = SUM(kalem.miktar * kalem.birim_fiyat)
-belge.genel_toplam = toplam - iskonto
+// Kur karşılığı
+odeme_tl_karsiligi = odeme.tutar * odeme.kur
 
-odeme_durumu:
-  - Ödenmedi: SUM(odeme.tutar) == 0
-  - Kısmi: 0 < SUM(odeme.tutar) < genel_toplam
-  - Ödendi: SUM(odeme.tutar) >= genel_toplam
+// Bakiye
+kalan = belge.tutar - SUM(odeme_tl_karsiligi)
 
-kalan = genel_toplam - SUM(odeme.tutar)
+// Ödeme durumu
+Ödenmedi  → SUM(ödemeler) == 0
+Kısmi     → 0 < SUM(ödemeler) < belge.tutar
+Ödendi    → SUM(ödemeler) >= belge.tutar
+
+// Gecikme
+gecikme = bugun - belge.tarih > 30 gün AND durum != Ödendi
 ```
 
 ---
 
-## Sayfa 1 — Gemi Listesi
+## Sayfa 1 — Belge Listesi
 
-- KPI: Toplam Alacak (TL / EUR / USD ayrı), Ödenen, Ödenmeyen
-- Gemi listesi: ad, şirket, toplam alacak, durum
-- Gemi ekle butonu
+- KPI kartları: Toplam Alacak (TL/EUR/USD), Ödenen, Ödenmeyen, Gecikmiş
+- Firma bazlı filtre
+- Belge türü filtresi (Fatura / Proforma / Hesap Bilgisi)
+- **Liste ve Izgara görünümü** (toggle)
+- Tablo kolonları: Belge No, Tür, Tarih, Açıklama, Tutar, Kur, Kalan, Durum badge, İşlemler
+- Durum badge: Ödenmedi (kırmızı) / Kısmi (turuncu) / Ödendi (yeşil)
+- Gecikmiş → satır kırmızı vurgulu
+- Toplu ödeme: birden fazla belge seç → toplu ödeme ekle
 
 ---
 
-## Sayfa 2 — Gemi Detay
+## Sayfa 2 — Belge Detay
 
-**Üst kart:** Gemi adı, IMO, şirket, ilgili kişiler
+**Üst kart:** Belge no, tür, tarih, tutar, para birimi, kur, firma, durum badge
 
 **Tabs:**
-1. Proformalar
-2. Faturalar
-3. Ödemeler
-4. Notlar
-
-Her belge satırında: belge no, tarih, tutar, para birimi, durum (Ödenmedi / Kısmi / Ödendi), kalan
-
-Ödeme detayı:
-```
-Proforma 202614 | 750.000 TL | KISMİ
-  └── Ödeme 1: 300.000 TL | 15.04 | Banka | [Dekont]
-  └── Kalan: 450.000 TL
-```
+1. **Ödemeler** — ödeme listesi + ödeme ekle butonu
+2. **Dosyalar** — yüklü dosyalar (PDF/Word), birden fazla yükleme
+3. **Notlar** — belgeye özel notlar
 
 ---
 
-## Sayfa 3 — Cari Genel
+## Sayfa 3 — Belge Ekle / Düzenle
 
-- Tüm gemilerin özet tablosu
-- Para birimi bazlı filtre (TL / EUR / USD)
-- Kolonlar: Gemi, Şirket, Belge No, Açıklama, Borç, Kur, Durum, Ödenme Tarihi, Bakiye
-
----
-
-## Sayfa 4 — Belge Ekle / Düzenle
-
-- Belge türü seçimi (Proforma / Fatura)
-- Gemi seçimi
-- İlgili kişi seçimi (sadece Proforma'da yok, Fatura'da opsiyonel)
-- Kalem kalem giriş (açıklama, miktar, birim, birim fiyat, iskonto)
-- Toplam / İskonto / Genel Toplam (oh)
-- Para birimi seçimi
-- PDF upload (alternatif olarak)
+- Belge türü seçimi (Fatura / Proforma / Hesap Bilgisi)
+- Belge no, tarih, açıklama
+- Tutar, para birimi, kur (zorunlu)
+- Firma seçimi (opsiyonel)
+- Birden fazla dosya upload (PDF / Word)
 - Notlar
 
 ---
 
-## Sayfa 5 — Firma Bazlı Görünüm
+## Sayfa 4 — Firma Listesi
 
-- Firma seçimi
-- O firmaya ait tüm gemiler
-- Firma bazlı bakiye (TL / EUR / USD ayrı)
-- Belge ve ödeme özeti
+- Firma ekle / düzenle
+- Firma bazlı bakiye özeti (TL / EUR / USD)
+- Firmaya tıklayınca o firmaya ait belgeler filtrelenir
