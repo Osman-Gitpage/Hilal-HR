@@ -335,6 +335,190 @@ export type Database = {
           },
         ]
       }
+      evrak: {
+        Row: {
+          baslangic_tarihi: string | null
+          bitis_tarihi: string | null
+          created_at: string
+          dosya_adi: string
+          dosya_boyut: number | null
+          dosya_tipi: string | null
+          dosya_url: string
+          durum: string
+          employment_period_id: string | null
+          id: string
+          kategori_id: string
+          onay_durumu: string
+          personel_id: string | null
+          sirket_id: string
+          updated_at: string
+          versiyon: number
+          yuklenme_tarihi: string
+        }
+        Insert: {
+          baslangic_tarihi?: string | null
+          bitis_tarihi?: string | null
+          created_at?: string
+          dosya_adi: string
+          dosya_boyut?: number | null
+          dosya_tipi?: string | null
+          dosya_url: string
+          durum?: string
+          employment_period_id?: string | null
+          id?: string
+          kategori_id: string
+          onay_durumu?: string
+          personel_id?: string | null
+          sirket_id: string
+          updated_at?: string
+          versiyon?: number
+          yuklenme_tarihi?: string
+        }
+        Update: {
+          baslangic_tarihi?: string | null
+          bitis_tarihi?: string | null
+          created_at?: string
+          dosya_adi?: string
+          dosya_boyut?: number | null
+          dosya_tipi?: string | null
+          dosya_url?: string
+          durum?: string
+          employment_period_id?: string | null
+          id?: string
+          kategori_id?: string
+          onay_durumu?: string
+          personel_id?: string | null
+          sirket_id?: string
+          updated_at?: string
+          versiyon?: number
+          yuklenme_tarihi?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evrak_employment_period_id_fkey"
+            columns: ["employment_period_id"]
+            isOneToOne: false
+            referencedRelation: "employment_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evrak_kategori_id_fkey"
+            columns: ["kategori_id"]
+            isOneToOne: false
+            referencedRelation: "evrak_kategori"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evrak_personel_id_fkey"
+            columns: ["personel_id"]
+            isOneToOne: false
+            referencedRelation: "personel"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evrak_sirket_id_fkey"
+            columns: ["sirket_id"]
+            isOneToOne: false
+            referencedRelation: "sirketler"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      evrak_kategori: {
+        Row: {
+          ad: string
+          aktif: boolean
+          created_at: string
+          id: string
+          sira: number
+          sirket_id: string
+          sureli: boolean
+          tip: string
+          updated_at: string
+          varsayilan_sure: number | null
+          zorunlu: boolean
+        }
+        Insert: {
+          ad: string
+          aktif?: boolean
+          created_at?: string
+          id?: string
+          sira?: number
+          sirket_id: string
+          sureli?: boolean
+          tip: string
+          updated_at?: string
+          varsayilan_sure?: number | null
+          zorunlu?: boolean
+        }
+        Update: {
+          ad?: string
+          aktif?: boolean
+          created_at?: string
+          id?: string
+          sira?: number
+          sirket_id?: string
+          sureli?: boolean
+          tip?: string
+          updated_at?: string
+          varsayilan_sure?: number | null
+          zorunlu?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evrak_kategori_sirket_id_fkey"
+            columns: ["sirket_id"]
+            isOneToOne: false
+            referencedRelation: "sirketler"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      evrak_log: {
+        Row: {
+          detay: Json | null
+          evrak_id: string | null
+          id: string
+          islem: string
+          kullanici_id: string | null
+          sirket_id: string
+          tarih: string
+        }
+        Insert: {
+          detay?: Json | null
+          evrak_id?: string | null
+          id?: string
+          islem: string
+          kullanici_id?: string | null
+          sirket_id: string
+          tarih?: string
+        }
+        Update: {
+          detay?: Json | null
+          evrak_id?: string | null
+          id?: string
+          islem?: string
+          kullanici_id?: string | null
+          sirket_id?: string
+          tarih?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evrak_log_evrak_id_fkey"
+            columns: ["evrak_id"]
+            isOneToOne: false
+            referencedRelation: "evrak"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evrak_log_sirket_id_fkey"
+            columns: ["sirket_id"]
+            isOneToOne: false
+            referencedRelation: "sirketler"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       firma: {
         Row: {
           ad: string
@@ -1047,11 +1231,104 @@ export type Database = {
         }
         Relationships: []
       }
+      tersane_ozel_belge: {
+        Row: {
+          ad: string
+          created_at: string
+          id: string
+          sablon_dosya_url: string | null
+          sablon_tipi: string | null
+          sira: number
+          sirket_id: string
+          tersane_sablon_id: string
+          updated_at: string
+        }
+        Insert: {
+          ad: string
+          created_at?: string
+          id?: string
+          sablon_dosya_url?: string | null
+          sablon_tipi?: string | null
+          sira?: number
+          sirket_id: string
+          tersane_sablon_id: string
+          updated_at?: string
+        }
+        Update: {
+          ad?: string
+          created_at?: string
+          id?: string
+          sablon_dosya_url?: string | null
+          sablon_tipi?: string | null
+          sira?: number
+          sirket_id?: string
+          tersane_sablon_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tersane_ozel_belge_sirket_id_fkey"
+            columns: ["sirket_id"]
+            isOneToOne: false
+            referencedRelation: "sirketler"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tersane_ozel_belge_tersane_sablon_id_fkey"
+            columns: ["tersane_sablon_id"]
+            isOneToOne: false
+            referencedRelation: "tersane_sablon"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tersane_sablon: {
+        Row: {
+          ad: string
+          aktif: boolean
+          created_at: string
+          id: string
+          sirket_id: string
+          standart_kategoriler: Json
+          updated_at: string
+        }
+        Insert: {
+          ad: string
+          aktif?: boolean
+          created_at?: string
+          id?: string
+          sirket_id: string
+          standart_kategoriler?: Json
+          updated_at?: string
+        }
+        Update: {
+          ad?: string
+          aktif?: boolean
+          created_at?: string
+          id?: string
+          sirket_id?: string
+          standart_kategoriler?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tersane_sablon_sirket_id_fkey"
+            columns: ["sirket_id"]
+            isOneToOne: false
+            referencedRelation: "sirketler"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      evrak_varsayilan_kategoriler_olustur: {
+        Args: { p_sirket_id: string }
+        Returns: undefined
+      }
       kullanici_sirket_erisim: {
         Args: { p_sirket_id: string }
         Returns: boolean

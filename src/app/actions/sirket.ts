@@ -115,6 +115,31 @@ export async function sirketKurVeTamamla(
     // Non-fatal — kullanıcı /ayarlar'dan düzeltebilir
   }
 
+  // Varsayılan evrak kategorilerini oluştur
+  try {
+    const varsayilanKategoriler = [
+      // Personel kategorileri
+      { ad: "İş Sözleşmesi", tip: "personel", zorunlu: true, sureli: false, sira: 1 },
+      { ad: "Kimlik Fotokopisi", tip: "personel", zorunlu: true, sureli: false, sira: 2 },
+      { ad: "SGK İşe Giriş", tip: "personel", zorunlu: true, sureli: false, sira: 3 },
+      { ad: "Adli Sicil", tip: "personel", zorunlu: false, sureli: true, varsayilan_sure: 180, sira: 4 },
+      { ad: "Sağlık Raporu", tip: "personel", zorunlu: false, sureli: true, varsayilan_sure: 365, sira: 5 },
+      { ad: "İmza", tip: "personel", zorunlu: false, sureli: false, sira: 6 },
+      // Şirket kategorileri
+      { ad: "Vergi Levhası", tip: "sirket", zorunlu: false, sureli: true, varsayilan_sure: 365, sira: 1 },
+      { ad: "İmza Sirküleri", tip: "sirket", zorunlu: false, sureli: false, sira: 2 },
+      { ad: "Kaşe", tip: "sirket", zorunlu: false, sureli: false, sira: 3 },
+    ];
+    await admin.from("evrak_kategori").insert(
+      varsayilanKategoriler.map((k) => ({
+        sirket_id: sirket.id,
+        ...k,
+      }))
+    );
+  } catch {
+    // Non-fatal — kullanıcı /ayarlar/evrak'tan ekleyebilir
+  }
+
   return { basarili: true };
 }
 

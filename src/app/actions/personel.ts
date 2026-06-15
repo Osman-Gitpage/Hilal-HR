@@ -295,8 +295,29 @@ export async function personelCikisYap(
 
   if (cikisRes.error) return { hata: cikisRes.error.message };
 
+  // Çıkış yapan personelin aktif evraklarını arşivle
+  try {
+    const { data: personelRow } = await admin
+      .from("personel")
+      .select("sirket_id")
+      .eq("id", personelId)
+      .single();
+
+    if (personelRow) {
+      await admin
+        .from("evrak")
+        .update({ durum: "arsiv" })
+        .eq("personel_id", personelId)
+        .eq("sirket_id", personelRow.sirket_id)
+        .eq("durum", "aktif");
+    }
+  } catch {
+    // Non-fatal — evrak arşivleme başarısız olsa bile çıkış işlemi tamamlandı
+  }
+
   revalidatePath("/personel");
   revalidatePath(`/personel/${personelId}`);
+  revalidatePath("/evrak");
   return { basarili: true };
 }
 

@@ -57,3 +57,19 @@ export type OdemeUpdate    = TablesUpdate<"odeme">;
 export type BelgeDosyaInsert = TablesInsert<"belge_dosya">;
 export type FirmaInsert    = TablesInsert<"firma">;
 export type FirmaUpdate    = TablesUpdate<"firma">;
+
+// ─── Evrak Modülü Tablo Tipleri ───────────────────────────────────────────────
+export type EvrakKategoriRow      = Tables<"evrak_kategori">;
+export type EvrakKategoriInsert   = TablesInsert<"evrak_kategori">;
+export type EvrakKategoriUpdate   = TablesUpdate<"evrak_kategori">;
+export type EvrakRow              = Tables<"evrak">;
+export type EvrakInsert           = TablesInsert<"evrak">;
+export type EvrakUpdate           = TablesUpdate<"evrak">;
+export type EvrakLogRow           = Tables<"evrak_log">;
+export type EvrakLogInsert        = TablesInsert<"evrak_log">;
+export type TersaneSablonRow      = Tables<"tersane_sablon">;
+export type TersaneSablonInsert   = TablesInsert<"tersane_sablon">;
+export type TersaneSablonUpdate   = TablesUpdate<"tersane_sablon">;
+export type TersaneOzelBelgeRow   = Tables<"tersane_ozel_belge">;
+export type TersaneOzelBelgeInsert = TablesInsert<"tersane_ozel_belge">;
+export type TersaneOzelBelgeUpdate = TablesUpdate<"tersane_ozel_belge">;

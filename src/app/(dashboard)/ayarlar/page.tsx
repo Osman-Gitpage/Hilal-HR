@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ayarlariGetir } from "@/app/actions/ayarlar";
 import { AyarlarView } from "@/components/modules/ayarlar/AyarlarView";
+import { AyarlarTabs } from "@/components/modules/ayarlar/AyarlarTabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VARSAYILAN_AYLIK_CALISMA_SAATI, VARSAYILAN_GUNLUK_CALISMA_SAATI } from "@/lib/constants";
 
@@ -20,9 +21,13 @@ async function AyarlarIcerik() {
   }
 
   return (
-    <AyarlarView
-      gunlukSaat={Number(ayarlar.gunluk_calisma_saati)}
-      aylikSaat={Number(ayarlar.aylik_calisma_saati)}
+    <AyarlarTabs
+      genelAyarlar={
+        <AyarlarView
+          gunlukSaat={Number(ayarlar.gunluk_calisma_saati)}
+          aylikSaat={Number(ayarlar.aylik_calisma_saati)}
+        />
+      }
     />
   );
 }
@@ -33,13 +38,14 @@ export default function AyarlarPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Ayarlar</h1>
         <p className="text-muted-foreground mt-1">
-          Şirket maaş hesaplama parametreleri ve çalışma saatleri.
+          Şirket ayarları, maaş hesaplama parametreleri ve evrak kategorileri.
         </p>
       </div>
 
       <Suspense
         fallback={
           <div className="max-w-2xl space-y-4">
+            <Skeleton className="h-10 w-72 rounded-lg" />
             <Skeleton className="h-64 w-full rounded-xl" />
           </div>
         }
@@ -49,3 +55,4 @@ export default function AyarlarPage() {
     </div>
   );
 }
+

@@ -102,3 +102,36 @@ export type {
   DosyaPayload,
   BelgeListFiltre,
 } from "./cari";
+
+// ─── Evrak Modülü ─────────────────────────────────────────────────────────────
+// Tüm evrak tipleri src/types/evrak.ts'de tanımlıdır.
+export type {
+  EvrakKategoriTip,
+  EvrakDurum,
+  EvrakOnayDurumu,
+  EvrakGecerlilikDurumu,
+  EvrakIslem,
+  EvrakKategori,
+  EvrakKategoriForm,
+  Evrak,
+  EvrakWithKategori,
+  EvrakVersiyonGrubu,
+  EvrakLog,
+  TersaneSablonKategoriRef,
+  TersaneSablon,
+  TersaneOzelBelge,
+  TersaneSablonWithBelgeler,
+  PersonelEvrakDurum,
+  PersonelEvrakOzet,
+  UploadProgress,
+  EvrakYukleForm,
+  EvrakListeFiltre,
+} from "./evrak";
+
+export {
+  EVRAK_KABUL_EDILEN_TIPLER,
+  EVRAK_UZANTI_MAP,
+  EVRAK_MAX_DOSYA_BOYUT,
+  EVRAK_MAX_VERSIYON,
+  EVRAK_YAKLASAN_ESIK_GUN,
+} from "./evrak";

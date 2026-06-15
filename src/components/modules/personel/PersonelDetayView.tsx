@@ -43,6 +43,7 @@ import { personelCikisYap, personelYenidenIseAl } from "@/app/actions/personel";
 import { formatTarih, formatPara, maskTc, formatAdSoyad } from "@/lib/utils/index";
 import { QUERY_KEYS } from "@/lib/constants";
 import type { Personel } from "@/supabase/app-types";
+import { PersonelEvraklar } from "@/components/modules/evrak/PersonelEvraklar";
 
 // ─────────────────────────────────────────────
 // Bilgi Satırı
@@ -421,6 +422,7 @@ export function PersonelDetayView({ personelId }: { personelId: string }) {
 
   // Gerçek aktiflik durumu
   const isAktif = periods.some((ep) => ep.bitis_tarihi === null);
+  const aktifDonemId = periods.find((ep) => ep.bitis_tarihi === null)?.id ?? null;
 
   if (isLoading) {
     return (
@@ -581,10 +583,7 @@ export function PersonelDetayView({ personelId }: { personelId: string }) {
         </TabsContent>
 
         <TabsContent value="evraklar" className="mt-4">
-          <div className="rounded-xl border bg-card p-10 text-center text-muted-foreground">
-            <FileText className="h-8 w-8 mx-auto mb-3 opacity-40" />
-            <p className="font-medium">Evrak yönetimi yakında</p>
-          </div>
+          <PersonelEvraklar personelId={personelId} aktifDonemId={aktifDonemId} />
         </TabsContent>
       </Tabs>
 

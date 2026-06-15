@@ -13,6 +13,7 @@ import {
   Plus,
   FileText,
   Calendar,
+  AlertTriangle,
 } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -85,6 +86,14 @@ const MODULLER = [
     aktif: true,
   },
   {
+    baslik: "Evrak Yönetimi",
+    aciklama: "Personel özlük dosyaları, şirket evrakları ve tersane şablonları",
+    href: "/evrak",
+    gradyan: "from-rose-500/10 to-rose-600/5 dark:from-rose-500/20 dark:to-rose-600/10",
+    ikon: "📁",
+    aktif: true,
+  },
+  {
     baslik: "Zimmet",
     aciklama: "Personel zimmet takibi ve devir işlemleri",
     href: "#",
@@ -125,7 +134,7 @@ export default async function DashboardPage() {
   const ay = now.getMonth() + 1;
 
   // 1. Paralel KPI + checklist sorguları
-  const [aktifPersonelRes, bordroRes, bekleyenRes, projeRes, toplamPersonelRes, ayarlarRes, toplamBordroRes] = await Promise.all([
+  const [aktifPersonelRes, bordroRes, bekleyenRes, projeRes, toplamPersonelRes, ayarlarRes, toplamBordroRes, evrakYaklasanRes] = await Promise.all([
     supabase
       .from("employment_periods")
       .select("personel_id", { count: "exact", head: true })
@@ -169,6 +178,15 @@ export default async function DashboardPage() {
       .from("maas_bordro")
       .select("id", { count: "exact", head: true })
       .eq("sirket_id", sirketId ?? "") as any,
+
+    // KPI: Süresi yaklaşan evraklar (30 gün içinde)
+    supabase
+      .from("evrak")
+      .select("id", { count: "exact", head: true })
+      .eq("sirket_id", sirketId ?? "")
+      .eq("durum", "aktif")
+      .lte("bitis_tarihi", new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
+      .gte("bitis_tarihi", new Date().toISOString().split("T")[0]) as any,
   ]);
 
   const aktifPersonel: number = aktifPersonelRes.count ?? 0;
@@ -176,6 +194,7 @@ export default async function DashboardPage() {
     .reduce((s, b) => s + (b.toplam_odeme ?? 0), 0);
   const bekleyenOnay: number = bekleyenRes.count ?? 0;
   const aktifProje: number = projeRes.count ?? 0;
+  const yaklasanEvrak: number = evrakYaklasanRes.count ?? 0;
 
   // Checklist verileri
   const herhangiPersonelVar: boolean = (toplamPersonelRes.count ?? 0) > 0;
@@ -309,7 +328,15 @@ export default async function DashboardPage() {
       alt: "devam eden çalışma",
       ikon: FolderOpen,
       renk: "text-violet-600 dark:text-violet-400 border-violet-500/20 bg-violet-500/[0.02]",
-      bg: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+      bg: "bg-violet-600/10 text-violet-600 dark:text-violet-400",
+    },
+    {
+      baslik: "Yaklaşan Evrak",
+      deger: yaklasanEvrak.toString(),
+      alt: `${yaklasanEvrak > 0 ? "süresi dolacak evrak" : "tüm evraklar güncel"}`,
+      ikon: AlertTriangle,
+      renk: "text-rose-600 dark:text-rose-400 border-rose-500/20 bg-rose-500/[0.02]",
+      bg: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
     },
   ];
 
@@ -367,7 +394,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* ── KPI Kartları ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
         {KPI_KARTLARI.map(({ baslik, deger, alt, ikon: Ikon, renk, bg }) => (
           <div
             key={baslik}

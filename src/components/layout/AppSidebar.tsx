@@ -7,6 +7,7 @@ import {
   DollarSign,
   ClipboardList,
   Receipt,
+  FileText,
   BarChart3,
   Settings,
   LayoutDashboard,
@@ -52,6 +53,12 @@ const NAV_ITEMS = [
     etiket: "Cari",
     ikon: Receipt,
     id: "nav-cari",
+  },
+  {
+    href: "/evrak",
+    etiket: "Evrak",
+    ikon: FileText,
+    id: "nav-evrak",
   },
   {
     href: "/raporlar",
