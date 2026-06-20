@@ -80,34 +80,35 @@ export function AppSidebar() {
   const { sidebarAcik, toggleSidebar, mobileSidebarAcik, setMobileSidebarAcik } = useUIStore();
 
   function handleNavClick() {
-    // Mobil drawer açıksa nav linke tıklayınca kapat
     if (mobileSidebarAcik) setMobileSidebarAcik(false);
   }
 
-  // Sidebar içeriği — desktop ve mobile drawer için ortak
+  // Shared sidebar inner layout
   function SidebarIcerik({ mobile = false }: { mobile?: boolean }) {
     const acik = mobile ? true : sidebarAcik;
 
     return (
-      <>
-        {/* Logo */}
-        <div className="flex items-center h-16 px-3 border-b shrink-0">
-          <div className="h-12 w-12 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
-            <img
-              src="/favicon.png"
-              alt="Favicon"
-              className="w-full h-full object-contain"
-            />
+      <div className="flex flex-col h-full bg-white dark:bg-zinc-950 transition-colors duration-300">
+        
+        {/* Logo Header */}
+        <div className="flex items-center h-16 px-4 border-b border-zinc-200 dark:border-zinc-900 shrink-0">
+          <div className="h-10 w-10 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl flex items-center justify-center font-black text-base shrink-0 overflow-hidden shadow-sm">
+            H
           </div>
           {acik && (
-            <span className="ml-3 font-bold text-sidebar-foreground text-sm truncate">
-              HILAL MUHASEBE
-            </span>
+            <div className="ml-3 flex flex-col min-w-0">
+              <span className="font-extrabold text-zinc-900 dark:text-white text-xs tracking-tight leading-none uppercase">
+                Hilal İK
+              </span>
+              <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-bold tracking-wider mt-0.5">
+                BORDRO & MUHASEBE
+              </span>
+            </div>
           )}
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
+        {/* Navigation List */}
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {NAV_ITEMS.map((item) => {
             const aktif = pathname === item.href || pathname.startsWith(item.href + "/");
             const Ikon = item.ikon;
@@ -119,21 +120,21 @@ export function AppSidebar() {
                 href={item.yakinsa ? "#" : item.href}
                 onClick={handleNavClick}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-xl py-2.5 text-xs font-semibold transition-all cursor-pointer",
                   aktif
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    ? "bg-zinc-50 dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 border-l-2 border-emerald-500 pl-3 rounded-l-none"
+                    : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-white pl-3.5",
                   item.yakinsa && "opacity-40 cursor-not-allowed",
-                  !acik && "justify-center"
+                  !acik && "justify-center pl-0"
                 )}
                 aria-current={aktif ? "page" : undefined}
               >
-                <Ikon className="h-4 w-4 shrink-0" />
+                <Ikon className="h-4.5 w-4.5 shrink-0" />
                 {acik && (
                   <span className="truncate">
                     {item.etiket}
                     {item.yakinsa && (
-                      <span className="ml-1 text-[10px] opacity-60">(Yakında)</span>
+                      <span className="ml-1.5 text-[9px] opacity-60">(Yakında)</span>
                     )}
                   </span>
                 )}
@@ -156,14 +157,14 @@ export function AppSidebar() {
           })}
         </nav>
 
-        {/* Toggle Button — sadece desktop'ta göster */}
+        {/* Toggle Button — Desktop Only */}
         {!mobile && (
-          <div className="border-t p-2">
+          <div className="border-t border-zinc-200 dark:border-zinc-900 p-2.5 shrink-0">
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleSidebar}
-              className="w-full h-8 text-sidebar-foreground hover:bg-sidebar-accent"
+              className="w-full h-8 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
               id="btn-sidebar-toggle"
               aria-label={sidebarAcik ? "Sidebar'ı kapat" : "Sidebar'ı aç"}
             >
@@ -175,7 +176,7 @@ export function AppSidebar() {
             </Button>
           </div>
         )}
-      </>
+      </div>
     );
   }
 
@@ -184,7 +185,7 @@ export function AppSidebar() {
       {/* ── DESKTOP Sidebar (sm ve üzeri) ── */}
       <aside
         className={cn(
-          "hidden sm:flex flex-col h-full border-r bg-sidebar transition-all duration-300 ease-in-out shrink-0",
+          "hidden sm:flex flex-col h-full border-r border-zinc-200 dark:border-zinc-900 transition-all duration-300 ease-in-out shrink-0",
           sidebarAcik ? "w-56" : "w-16"
         )}
       >
@@ -195,7 +196,7 @@ export function AppSidebar() {
       {/* Backdrop */}
       {mobileSidebarAcik && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 sm:hidden"
+          className="fixed inset-0 z-40 bg-black/40 dark:bg-black/60 sm:hidden"
           onClick={() => setMobileSidebarAcik(false)}
           aria-hidden="true"
         />
@@ -204,7 +205,7 @@ export function AppSidebar() {
       {/* Drawer */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex flex-col w-64 border-r bg-sidebar transition-transform duration-300 ease-in-out sm:hidden",
+          "fixed inset-y-0 left-0 z-50 flex flex-col w-64 border-r border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-950 transition-transform duration-300 ease-in-out sm:hidden",
           mobileSidebarAcik ? "translate-x-0" : "-translate-x-full"
         )}
         aria-label="Mobil navigasyon"

@@ -85,14 +85,14 @@ export function AppTopbar({ user, sirketler }: AppTopbarProps) {
   }
 
   return (
-    <header className="h-16 border-b bg-background/95 backdrop-blur flex items-center justify-between px-4 sm:px-6 shrink-0 gap-3">
+    <header className="h-16 border-b border-zinc-200 dark:border-zinc-900 bg-white/95 dark:bg-zinc-950/95 backdrop-blur flex items-center justify-between px-4 sm:px-6 shrink-0 gap-3">
       {/* Sol: Hamburger + Şirket Switcher */}
       <div className="flex items-center gap-3 min-w-0">
         {/* Hamburger — sadece mobile */}
         <Button
           variant="ghost"
           size="icon"
-          className="sm:hidden shrink-0 h-9 w-9"
+          className="sm:hidden shrink-0 h-9 w-9 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
           onClick={toggleMobileSidebar}
           id="btn-mobile-menu"
           aria-label="Menüyü aç"

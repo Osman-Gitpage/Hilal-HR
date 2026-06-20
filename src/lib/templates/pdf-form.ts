@@ -1,7 +1,8 @@
 // ─── PDF Form Doldurma + İmza/Kaşe Engine ────────────────────────────────────
 // pdf-lib ile AcroForm doldurma, imza/kaşe drawImage, flatten
 
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { PDFDocument, rgb, StandardFonts, PDFTextField, PDFCheckBox } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 
 /**
  * PDF formundaki AcroForm alanlarını doldur.
@@ -14,22 +15,61 @@ export async function pdfFormDoldur(
   alanlar: Record<string, string>
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.load(pdfBuffer);
+  
+  // Register fontkit
+  pdf.registerFontkit(fontkit);
+
+  // Load Roboto font to support Turkish characters
+  let fontBytes: ArrayBuffer;
+  if (typeof window === "undefined") {
+    // Server-side
+    const fs = require("fs");
+    const path = require("path");
+    const fontPath = path.join(process.cwd(), "public", "fonts", "Roboto.ttf");
+    fontBytes = fs.readFileSync(fontPath);
+  } else {
+    // Client-side
+    const response = await fetch("/fonts/Roboto.ttf");
+    fontBytes = await response.arrayBuffer();
+  }
+  const customFont = await pdf.embedFont(fontBytes);
+
   const form = pdf.getForm();
 
   for (const [alanAdi, deger] of Object.entries(alanlar)) {
     try {
-      const field = form.getTextField(alanAdi);
-      field.setText(deger);
+      const field = form.getField(alanAdi);
+      if (field instanceof PDFTextField) {
+        field.setText(deger);
+        field.updateAppearances(customFont);
+      } else if (field instanceof PDFCheckBox) {
+        if (deger.toLowerCase() === "true" || deger.toLowerCase() === "yes" || deger === "1") {
+          field.check();
+        } else {
+          field.uncheck();
+        }
+        field.updateAppearances();
+      } else if ("setText" in field) {
+        (field as any).setText(deger);
+        if ("updateAppearances" in field && typeof (field as any).updateAppearances === "function") {
+          (field as any).updateAppearances(customFont);
+        }
+      } else if ("check" in field && (deger.toLowerCase() === "true" || deger.toLowerCase() === "yes" || deger === "1")) {
+        (field as any).check();
+        if ("updateAppearances" in field && typeof (field as any).updateAppearances === "function") {
+          (field as any).updateAppearances();
+        }
+      }
     } catch {
-      // Alan bulunamazsa sessizce atla
-      console.warn(`PDF form alanı bulunamadı: ${alanAdi}`);
+      // Alan bulunamazsa veya doldurulamazsa sessizce atla
+      console.warn(`PDF form alanı bulunamadı veya güncellenemedi: ${alanAdi}`);
     }
   }
 
   // Flatten — tüm form alanlarını statik metin yap
-  form.flatten();
+  form.flatten({ updateFieldAppearances: false });
 
-  return pdf.save();
+  return pdf.save({ updateFieldAppearances: false });
 }
 
 /**
