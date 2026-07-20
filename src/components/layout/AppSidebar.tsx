@@ -16,6 +16,17 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/uiStore";
+
+interface NavItem {
+  href: string;
+  etiket: string;
+  ikon: React.ForwardRefExoticComponent<
+    Omit<import("lucide-react").LucideProps, "ref"> &
+      React.RefAttributes<SVGSVGElement>
+  >;
+  id: string;
+  yakinsa?: boolean;
+}
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -23,7 +34,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-const NAV_GROUPS = [
+const NAV_GROUPS: { baslik: string; items: NavItem[] }[] = [
   {
     baslik: "Ana Menü",
     items: [
@@ -202,18 +213,20 @@ export function AppSidebar() {
 
                 return (
                   <Tooltip key={item.id}>
-                    <TooltipTrigger asChild>
+                    <TooltipTrigger
+                      className={cn(
+                        "flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-150",
+                        aktif
+                          ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                          : "text-zinc-400 dark:text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 hover:text-zinc-700 dark:hover:text-zinc-300",
+                        item.yakinsa && "opacity-40 cursor-not-allowed pointer-events-none"
+                      )}
+                    >
                       <Link
                         id={item.id}
                         href={item.yakinsa ? "#" : item.href}
                         onClick={handleNavClick}
-                        className={cn(
-                          "flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-150",
-                          aktif
-                            ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white"
-                            : "text-zinc-400 dark:text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 hover:text-zinc-700 dark:hover:text-zinc-300",
-                          item.yakinsa && "opacity-40 cursor-not-allowed pointer-events-none"
-                        )}
+                        className="flex items-center justify-center w-full h-full"
                         aria-current={aktif ? "page" : undefined}
                       >
                         <Ikon className="h-4.5 w-4.5 shrink-0" />
