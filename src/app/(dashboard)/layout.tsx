@@ -31,6 +31,7 @@ export default async function DashboardLayout({
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <AppSidebar />
+      
       {/* flex-1 → desktop'ta kalan alanı doldurur; mobile'da sidebar fixed olduğundan tam genişlik alır */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <AppTopbar user={user} sirketler={sirketler ?? []} />
@@ -39,4 +40,5 @@ export default async function DashboardLayout({
     </div>
   );
 }
+
 

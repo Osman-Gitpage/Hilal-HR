@@ -23,148 +23,223 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-const NAV_ITEMS = [
+const NAV_GROUPS = [
   {
-    href: "/dashboard",
-    etiket: "Dashboard",
-    ikon: LayoutDashboard,
-    id: "nav-dashboard",
+    baslik: "Ana Menü",
+    items: [
+      {
+        href: "/dashboard",
+        etiket: "Dashboard",
+        ikon: LayoutDashboard,
+        id: "nav-dashboard",
+      },
+    ],
   },
   {
-    href: "/personel",
-    etiket: "Personel",
-    ikon: Users,
-    id: "nav-personel",
+    baslik: "İşlemler",
+    items: [
+      {
+        href: "/personel",
+        etiket: "Personel",
+        ikon: Users,
+        id: "nav-personel",
+      },
+      {
+        href: "/bordro",
+        etiket: "Bordro",
+        ikon: DollarSign,
+        id: "nav-bordro",
+      },
+      {
+        href: "/puantaj",
+        etiket: "Puantaj",
+        ikon: ClipboardList,
+        id: "nav-puantaj",
+      },
+      {
+        href: "/cari",
+        etiket: "Cari",
+        ikon: Receipt,
+        id: "nav-cari",
+      },
+      {
+        href: "/evrak",
+        etiket: "Evrak",
+        ikon: FileText,
+        id: "nav-evrak",
+      },
+    ],
   },
   {
-    href: "/bordro",
-    etiket: "Bordro",
-    ikon: DollarSign,
-    id: "nav-bordro",
+    baslik: "Raporlama",
+    items: [
+      {
+        href: "/raporlar",
+        etiket: "Raporlar",
+        ikon: BarChart3,
+        id: "nav-raporlar",
+        yakinsa: true,
+      },
+    ],
   },
   {
-    href: "/puantaj",
-    etiket: "Puantaj",
-    ikon: ClipboardList,
-    id: "nav-puantaj",
-  },
-  {
-    href: "/cari",
-    etiket: "Cari",
-    ikon: Receipt,
-    id: "nav-cari",
-  },
-  {
-    href: "/evrak",
-    etiket: "Evrak",
-    ikon: FileText,
-    id: "nav-evrak",
-  },
-  {
-    href: "/raporlar",
-    etiket: "Raporlar",
-    ikon: BarChart3,
-    id: "nav-raporlar",
-    yakinsa: true,
-  },
-  {
-    href: "/ayarlar",
-    etiket: "Ayarlar",
-    ikon: Settings,
-    id: "nav-ayarlar",
+    baslik: "Sistem",
+    items: [
+      {
+        href: "/ayarlar",
+        etiket: "Ayarlar",
+        ikon: Settings,
+        id: "nav-ayarlar",
+      },
+    ],
   },
 ];
 
+// Tüm nav itemları düz liste olarak — collapsed tooltip için
+const NAV_ITEMS_FLAT = NAV_GROUPS.flatMap((g) => g.items);
+
 export function AppSidebar() {
   const pathname = usePathname();
-  const { sidebarAcik, toggleSidebar, mobileSidebarAcik, setMobileSidebarAcik } = useUIStore();
+  const { sidebarAcik, toggleSidebar, mobileSidebarAcik, setMobileSidebarAcik } =
+    useUIStore();
 
   function handleNavClick() {
     if (mobileSidebarAcik) setMobileSidebarAcik(false);
   }
 
-  // Shared sidebar inner layout
   function SidebarIcerik({ mobile = false }: { mobile?: boolean }) {
     const acik = mobile ? true : sidebarAcik;
 
     return (
-      <div className="flex flex-col h-full bg-white dark:bg-zinc-950 transition-colors duration-300">
-        
-        {/* Logo Header */}
-        <div className="flex items-center h-16 px-4 border-b border-zinc-200 dark:border-zinc-900 shrink-0">
-          <div className="h-10 w-10 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl flex items-center justify-center font-black text-base shrink-0 overflow-hidden shadow-sm">
+      <div className="flex flex-col h-full bg-white dark:bg-zinc-950">
+
+        {/* ── Logo / Marka Başlığı ── */}
+        <div
+          className={cn(
+            "flex items-center h-16 shrink-0 border-b border-zinc-100 dark:border-zinc-900",
+            acik ? "px-5 gap-3" : "justify-center px-0"
+          )}
+        >
+          <div className="h-9 w-9 bg-zinc-900 dark:bg-white rounded-xl flex items-center justify-center font-black text-sm text-white dark:text-zinc-950 shrink-0 shadow-sm">
             H
           </div>
           {acik && (
-            <div className="ml-3 flex flex-col min-w-0">
-              <span className="font-extrabold text-zinc-900 dark:text-white text-xs tracking-tight leading-none uppercase">
+            <div className="flex flex-col min-w-0">
+              <span className="font-bold text-zinc-900 dark:text-white text-sm leading-tight tracking-tight">
                 Hilal İK
               </span>
-              <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-bold tracking-wider mt-0.5">
-                BORDRO & MUHASEBE
+              <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium mt-0.5 tracking-wide">
+                Bordro & Muhasebe
               </span>
             </div>
           )}
         </div>
 
-        {/* Navigation List */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map((item) => {
-            const aktif = pathname === item.href || pathname.startsWith(item.href + "/");
-            const Ikon = item.ikon;
+        {/* ── Navigasyon ── */}
+        <nav className="flex-1 overflow-y-auto py-4">
+          {acik ? (
+            /* Geniş mod: gruplu bölümler */
+            <div className="space-y-5 px-4">
+              {NAV_GROUPS.map((grup) => (
+                <div key={grup.baslik}>
+                  {/* Bölüm başlığı */}
+                  <p className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-1.5 px-2">
+                    {grup.baslik}
+                  </p>
 
-            const link = (
-              <Link
-                key={item.id}
-                id={item.id}
-                href={item.yakinsa ? "#" : item.href}
-                onClick={handleNavClick}
-                className={cn(
-                  "flex items-center gap-3 rounded-xl py-2.5 text-xs font-semibold transition-all cursor-pointer",
-                  aktif
-                    ? "bg-zinc-50 dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 border-l-2 border-emerald-500 pl-3 rounded-l-none"
-                    : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 hover:text-zinc-900 dark:hover:text-white pl-3.5",
-                  item.yakinsa && "opacity-40 cursor-not-allowed",
-                  !acik && "justify-center pl-0"
-                )}
-                aria-current={aktif ? "page" : undefined}
-              >
-                <Ikon className="h-4.5 w-4.5 shrink-0" />
-                {acik && (
-                  <span className="truncate">
-                    {item.etiket}
-                    {item.yakinsa && (
-                      <span className="ml-1.5 text-[9px] opacity-60">(Yakında)</span>
-                    )}
-                  </span>
-                )}
-              </Link>
-            );
+                  {/* Bölüm linkleri */}
+                  <div className="space-y-0.5">
+                    {grup.items.map((item) => {
+                      const aktif =
+                        pathname === item.href ||
+                        pathname.startsWith(item.href + "/");
+                      const Ikon = item.ikon;
 
-            if (!acik) {
-              return (
-                <Tooltip key={item.id}>
-                  <TooltipTrigger className="w-full">{link}</TooltipTrigger>
-                  <TooltipContent side="right">
-                    {item.etiket}
-                    {item.yakinsa && " (Yakında)"}
-                  </TooltipContent>
-                </Tooltip>
-              );
-            }
+                      return (
+                        <Link
+                          key={item.id}
+                          id={item.id}
+                          href={item.yakinsa ? "#" : item.href}
+                          onClick={handleNavClick}
+                          className={cn(
+                            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                            aktif
+                              ? "bg-zinc-100 dark:bg-zinc-800/80 text-zinc-900 dark:text-white"
+                              : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 hover:text-zinc-800 dark:hover:text-zinc-200",
+                            item.yakinsa && "opacity-40 cursor-not-allowed pointer-events-none"
+                          )}
+                          aria-current={aktif ? "page" : undefined}
+                        >
+                          <Ikon
+                            className={cn(
+                              "h-4 w-4 shrink-0",
+                              aktif
+                                ? "text-zinc-800 dark:text-white"
+                                : "text-zinc-400 dark:text-zinc-500"
+                            )}
+                          />
+                          <span className="truncate">{item.etiket}</span>
+                          {item.yakinsa && (
+                            <span className="ml-auto text-[9px] bg-zinc-200 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 rounded px-1 py-0.5 font-semibold tracking-wide">
+                              Yakında
+                            </span>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* Dar mod: sadece ikonlar + tooltip */
+            <div className="flex flex-col items-center gap-1 px-2">
+              {NAV_ITEMS_FLAT.map((item) => {
+                const aktif =
+                  pathname === item.href ||
+                  pathname.startsWith(item.href + "/");
+                const Ikon = item.ikon;
 
-            return link;
-          })}
+                return (
+                  <Tooltip key={item.id}>
+                    <TooltipTrigger asChild>
+                      <Link
+                        id={item.id}
+                        href={item.yakinsa ? "#" : item.href}
+                        onClick={handleNavClick}
+                        className={cn(
+                          "flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-150",
+                          aktif
+                            ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                            : "text-zinc-400 dark:text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 hover:text-zinc-700 dark:hover:text-zinc-300",
+                          item.yakinsa && "opacity-40 cursor-not-allowed pointer-events-none"
+                        )}
+                        aria-current={aktif ? "page" : undefined}
+                      >
+                        <Ikon className="h-4.5 w-4.5 shrink-0" />
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="text-xs">
+                      {item.etiket}
+                      {item.yakinsa && " (Yakında)"}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </div>
+          )}
         </nav>
 
-        {/* Toggle Button — Desktop Only */}
+        {/* ── Toggle Butonu — Sadece Desktop ── */}
         {!mobile && (
-          <div className="border-t border-zinc-200 dark:border-zinc-900 p-2.5 shrink-0">
+          <div className="border-t border-zinc-100 dark:border-zinc-900 p-3 shrink-0">
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleSidebar}
-              className="w-full h-8 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
+              className={cn(
+                "w-full h-8 text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900/60 transition-all duration-150",
+              )}
               id="btn-sidebar-toggle"
               aria-label={sidebarAcik ? "Sidebar'ı kapat" : "Sidebar'ı aç"}
             >
@@ -182,30 +257,29 @@ export function AppSidebar() {
 
   return (
     <>
-      {/* ── DESKTOP Sidebar (sm ve üzeri) ── */}
+      {/* ── DESKTOP Sidebar ── */}
       <aside
         className={cn(
-          "hidden sm:flex flex-col h-full border-r border-zinc-200 dark:border-zinc-900 transition-all duration-300 ease-in-out shrink-0",
-          sidebarAcik ? "w-56" : "w-16"
+          "hidden sm:flex flex-col h-full border-r border-zinc-100 dark:border-zinc-900 transition-all duration-300 ease-in-out shrink-0",
+          sidebarAcik ? "w-56" : "w-[60px]"
         )}
       >
         <SidebarIcerik />
       </aside>
 
-      {/* ── MOBİL Overlay + Drawer (sm altı) ── */}
-      {/* Backdrop */}
+      {/* ── MOBİL Backdrop ── */}
       {mobileSidebarAcik && (
         <div
-          className="fixed inset-0 z-40 bg-black/40 dark:bg-black/60 sm:hidden"
+          className="fixed inset-0 z-40 bg-black/30 dark:bg-black/50 sm:hidden backdrop-blur-sm"
           onClick={() => setMobileSidebarAcik(false)}
           aria-hidden="true"
         />
       )}
 
-      {/* Drawer */}
+      {/* ── MOBİL Drawer ── */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex flex-col w-64 border-r border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-950 transition-transform duration-300 ease-in-out sm:hidden",
+          "fixed inset-y-0 left-0 z-50 flex flex-col w-64 border-r border-zinc-100 dark:border-zinc-900 bg-white dark:bg-zinc-950 transition-transform duration-300 ease-in-out sm:hidden shadow-xl",
           mobileSidebarAcik ? "translate-x-0" : "-translate-x-full"
         )}
         aria-label="Mobil navigasyon"
