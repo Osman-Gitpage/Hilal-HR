@@ -195,31 +195,37 @@ export type Database = {
         Row: {
           belge_id: string
           boyut_byte: number | null
+          cift_no: number | null
           created_at: string
           dosya_adi: string
           dosya_tipi: string
           dosya_url: string
           id: string
+          kategori: string
           sirket_id: string
         }
         Insert: {
           belge_id: string
           boyut_byte?: number | null
+          cift_no?: number | null
           created_at?: string
           dosya_adi: string
           dosya_tipi: string
           dosya_url: string
           id?: string
+          kategori?: string
           sirket_id: string
         }
         Update: {
           belge_id?: string
           boyut_byte?: number | null
+          cift_no?: number | null
           created_at?: string
           dosya_adi?: string
           dosya_tipi?: string
           dosya_url?: string
           id?: string
+          kategori?: string
           sirket_id?: string
         }
         Relationships: [

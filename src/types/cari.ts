@@ -13,6 +13,9 @@ export type OdemeYontem = "banka" | "elden";
 
 export type DosyaTipi = "PDF" | "Word";
 
+/** Dosya kategorisi: belge–dekont çifti veya serbest dosya */
+export type DosyaKategori = "belge" | "dekont" | "diger";
+
 // ── Temel Kayıt Tipleri ──────────────────────────────────────────────────────
 
 export interface Firma {
@@ -46,6 +49,10 @@ export interface BelgeDosya {
   dosya_adi: string;
   dosya_tipi: DosyaTipi;
   boyut_byte: number | null;
+  /** 'belge' | 'dekont' | 'diger' — varsayılan 'diger' */
+  kategori: DosyaKategori;
+  /** Belge–Dekont çift numarası (1, 2, 3…). 'diger' için null. */
+  cift_no: number | null;
   created_at: string;
 }
 
@@ -149,6 +156,8 @@ export interface DosyaPayload {
   dosya_adi: string;
   dosya_tipi: DosyaTipi;
   boyut_byte?: number | null;
+  kategori?: DosyaKategori;
+  cift_no?: number | null;
 }
 
 // ── Filtre Tipleri ───────────────────────────────────────────────────────────

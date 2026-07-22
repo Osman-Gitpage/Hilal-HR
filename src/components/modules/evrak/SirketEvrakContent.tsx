@@ -50,7 +50,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { EvrakYukleDialog } from "@/components/modules/evrak/EvrakYukleDialog";
-import { DosyaOnizleme } from "@/components/modules/evrak/DosyaOnizleme";
+import { DosyaGoruntule as DosyaOnizleme } from "@/components/ui/DosyaGoruntule";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ANA BİLEŞEN

@@ -308,7 +308,7 @@ export async function belgeDetayGetir(belgeId: string): Promise<BelgeDetay> {
       firma_id, created_at, updated_at,
       firma ( id, ad, notlar ),
       odeme ( id, belge_id, sirket_id, tarih, tutar, para_birimi, kur, yontem, aciklama, created_at ),
-      belge_dosya ( id, belge_id, sirket_id, dosya_url, dosya_adi, dosya_tipi, boyut_byte, created_at )
+      belge_dosya ( id, belge_id, sirket_id, dosya_url, dosya_adi, dosya_tipi, boyut_byte, kategori, cift_no, created_at )
     `)
     .eq("id", belgeId)
     .eq("sirket_id", sirketId)
@@ -595,6 +595,8 @@ export async function belgeDosyaEkle(
         dosya_adi: payload.dosya_adi,
         dosya_tipi: payload.dosya_tipi,
         boyut_byte: payload.boyut_byte ?? null,
+        kategori: payload.kategori ?? "diger",
+        cift_no: payload.cift_no ?? null,
       })
       .select("id")
       .single();
