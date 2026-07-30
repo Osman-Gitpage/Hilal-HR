@@ -45,7 +45,7 @@ import { useAyarlar } from "@/hooks/useAyarlar";
 import { useBordroForm } from "@/hooks/useBordroForm";
 import { bordroKaydet, ekKalemKaydet } from "@/app/actions/maas";
 import { avansDeviriHesapla } from "@/lib/utils/maasHesap";
-import { formatAdSoyad } from "@/lib/utils/index";
+import { formatAdSoyad, getValidMaasAtDate } from "@/lib/utils/index";
 import { VARSAYILAN_AYLIK_CALISMA_SAATI } from "@/lib/constants";
 
 // ─── Sabitler ────────────────────────────────────────────────
@@ -117,12 +117,10 @@ export function BordroVeriGirisiView() {
     if (bordroHata) toast.error("Bordro verisi yüklenirken hata oluştu.");
   }, [bordroHata]);
 
-  // ── Seçilen personelin aktif maaşı ──
+  // ── Seçilen personelin seçili dönemde geçerli olan maaşı ──
   const seciliPersonel = personeller.find((p) => p.id === seciliPersonelId);
-  const aktifMaas =
-    seciliPersonel?.maas_gecmisi?.find(
-      (m: { gecerlilik_bitis: string | null }) => m.gecerlilik_bitis === null
-    )?.maas_net ?? 0;
+  const donemTarihStr = `${seciliDonemYil}-${String(seciliDonemAy).padStart(2, "0")}-01`;
+  const aktifMaas = getValidMaasAtDate(seciliPersonel?.maas_gecmisi, donemTarihStr) ?? 0;
 
   // ── Form state (useReducer) + memoized hesaplama ──
   const { state, dispatch, setField, hesap, isDirty, markSaved } = useBordroForm({

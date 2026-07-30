@@ -17,8 +17,8 @@ import {
 } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Dashboard — Hilal HR",
-  description: "Hilal İK yönetim paneli ana sayfası",
+  title: "Dashboard — Hilal Office",
+  description: "Hilal Office yönetim paneli ana sayfası",
 };
 
 const AY_ADLARI = [
@@ -360,7 +360,7 @@ export default async function DashboardPage() {
             👋
           </h1>
           <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-            Hilal HR & Muhasebe yönetim paneline hoş geldiniz. Şirketinizin güncel finansal ve operasyonel durumunu aşağıdan takip edebilirsiniz.
+            Hilal Office & Muhasebe yönetim paneline hoş geldiniz. Şirketinizin güncel finansal ve operasyonel durumunu aşağıdan takip edebilirsiniz.
           </p>
         </div>
 

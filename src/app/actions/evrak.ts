@@ -8,7 +8,7 @@
 import { createClient } from "@/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { deleteB2Object } from "@/lib/storage/b2";
+import { deleteFromB2 } from "@/lib/storage";
 import type {
   EvrakKategoriTip,
   EvrakIslem,
@@ -169,6 +169,37 @@ export async function evrakKategoriGuncelle(
     updateData.varsayilan_sure = params.varsayilan_sure;
   if (params.aktif !== undefined) updateData.aktif = params.aktif;
 
+  // Eğer ID veritabanında yoksa (örn: kat- ön tanımlı kategori ise) otomatik oluştur
+  const { data: existing } = await supabase
+    .from("evrak_kategori")
+    .select("id")
+    .eq("id", id)
+    .eq("sirket_id", sirketId)
+    .maybeSingle();
+
+  if (!existing && id.startsWith("kat-")) {
+    const { data: newData, error: createError } = await supabase
+      .from("evrak_kategori")
+      .insert({
+        sirket_id: sirketId,
+        ad: params.ad ?? "Kategori",
+        tip: "personel",
+        zorunlu: params.zorunlu ?? false,
+        sureli: params.sureli ?? false,
+        varsayilan_sure: params.varsayilan_sure ?? null,
+        sira: 99,
+      })
+      .select()
+      .single();
+
+    if (createError) {
+      return { error: `Kategori oluşturma hatası: ${createError.message}` };
+    }
+    revalidatePath("/ayarlar");
+    revalidatePath("/evrak");
+    return { data: newData };
+  }
+
   const { data, error } = await supabase
     .from("evrak_kategori")
     .update(updateData)
@@ -190,9 +221,9 @@ export async function evrakKategoriGuncelle(
 }
 
 /**
- * Evrak kategorisi sil (bağlı evrak varsa engelle).
+ * Evrak kategorisi sil (bağlı evrak varsa uyar veya force=true ile temizle).
  */
-export async function evrakKategoriSil(id: string) {
+export async function evrakKategoriSil(id: string, force: boolean = false) {
   const { supabase, sirketId } = await getAuthContext();
 
   // Bağlı evrak var mı kontrol et
@@ -202,10 +233,37 @@ export async function evrakKategoriSil(id: string) {
     .eq("kategori_id", id)
     .eq("sirket_id", sirketId);
 
-  if (count && count > 0) {
+  if (count && count > 0 && !force) {
     return {
-      error: `Bu kategoriye bağlı ${count} evrak var. Önce evrakları silin veya başka kategoriye taşıyın.`,
+      error: `Bu kategoriye bağlı ${count} evrak kaydı bulunuyor.`,
+      bagliEvrakSayisi: count,
     };
+  }
+
+  // Eğer force=true ise bağlı evrak kayıtlarını DB ve B2'den temizle
+  if (count && count > 0 && force) {
+    const { data: bagliEvraklar } = await supabase
+      .from("evrak")
+      .select("id, dosya_url")
+      .eq("kategori_id", id)
+      .eq("sirket_id", sirketId);
+
+    if (bagliEvraklar && bagliEvraklar.length > 0) {
+      for (const evrak of bagliEvraklar) {
+        if (evrak.dosya_url) {
+          try {
+            await deleteFromB2({ objectKey: evrak.dosya_url });
+          } catch {
+            // B2 nesnesi yoksa pas geç
+          }
+        }
+      }
+      await supabase
+        .from("evrak")
+        .delete()
+        .eq("kategori_id", id)
+        .eq("sirket_id", sirketId);
+    }
   }
 
   const { error } = await supabase
@@ -329,9 +387,82 @@ export async function sirketEvraklariGetir() {
 }
 
 /**
- * Yeni evrak oluştur (yükle).
- * Versiyon yönetimi: aynı personel+kategori+dönem için max 3 versiyon.
- * 3'ü aşarsa en eski versiyon silinir.
+ * Preset kat- ID'lerini veya isimleri veritabanındaki gerçek UUID ID'ye dönüştürür.
+ * Veritabanında yoksa Postgres UUID üreterek otomatik oluşturur.
+ */
+async function gercekKategoriIdBulVeyaOlustur(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sirketId: string,
+  kategoriId: string,
+  kategoriAdHint?: string
+): Promise<string> {
+  // 1. Eğer kategoriId geçerli bir UUID ise (kat- ile başlamıyorsa), DB'de var mı kontrol et
+  if (!kategoriId.startsWith("kat-")) {
+    const { data } = await supabase
+      .from("evrak_kategori")
+      .select("id")
+      .eq("id", kategoriId)
+      .eq("sirket_id", sirketId)
+      .maybeSingle();
+
+    if (data) return data.id;
+  }
+
+  // 2. Preset ID veya isim bazlı arama yap
+  let arananAd = kategoriAdHint ?? "";
+  if (!arananAd) {
+    if (kategoriId === "kat-saglik") arananAd = "Sağlık Raporu";
+    else if (kategoriId === "kat-tetenoz") arananAd = "Tetenoz";
+    else if (kategoriId === "kat-adli-sicil") arananAd = "Adli Sicil";
+    else if (kategoriId === "kat-sgk") arananAd = "SGK";
+    else if (kategoriId === "kat-kkd") arananAd = "KKD";
+    else if (kategoriId === "kat-sozlesme") arananAd = "Sözleşme";
+    else if (kategoriId === "kat-kimlik") arananAd = "Kimlik";
+    else if (kategoriId === "kat-sertifika") arananAd = "Sertifika";
+    else if (kategoriId === "kat-ikametgah") arananAd = "İkametgah";
+    else if (kategoriId === "kat-diploma") arananAd = "Diploma";
+    else if (kategoriId === "kat-fotograf") arananAd = "Fotoğraf";
+  }
+
+  if (arananAd) {
+    const { data: isimli } = await supabase
+      .from("evrak_kategori")
+      .select("id")
+      .eq("sirket_id", sirketId)
+      .ilike("ad", `%${arananAd}%`)
+      .limit(1)
+      .maybeSingle();
+
+    if (isimli) return isimli.id;
+  }
+
+  // 3. Veritabanında yoksa, id göndermeden (Postgres UUID üretecek şekilde) yeni kategori oluştur
+  const { data: yeni, error } = await supabase
+    .from("evrak_kategori")
+    .insert({
+      sirket_id: sirketId,
+      ad: arananAd || "Evrak Kategorisi",
+      tip: "personel",
+      zorunlu: true,
+      sureli: true,
+      varsayilan_sure: 365,
+      sira: 99,
+    })
+    .select("id")
+    .single();
+
+  if (error || !yeni) {
+    console.error("Kategori oluşturma hatası:", error);
+    return kategoriId;
+  }
+
+  return yeni.id;
+}
+
+/**
+ * Yeni evrak oluştur (yükle / değiştir).
+ * Versiyon yönetimi: Max 2 dosya tutulur (1 Canlı + 1 Geçmiş).
+ * 3. dosya yüklendiğinde, en eski (geçmiş) evrak DB ve B2'den otomatik silinir.
  */
 export async function evrakOlustur(params: {
   kategori_id: string;
@@ -343,17 +474,25 @@ export async function evrakOlustur(params: {
   dosya_tipi?: string;
   baslangic_tarihi?: string;
   bitis_tarihi?: string;
+  tetenoz_iceriyor?: boolean;
 }) {
   const { supabase, user, sirketId } = await getAuthContext();
 
-  // Mevcut versiyonları bul
+  // Gerçek UUID Kategori ID'sini çöz
+  const hedefKategoriId = await gercekKategoriIdBulVeyaOlustur(
+    supabase,
+    sirketId,
+    params.kategori_id
+  );
+
+  // Mevcut evrakları tarih sırasıyla al (en eski -> en yeni)
   let mevcutQuery = supabase
     .from("evrak")
     .select("id, versiyon, dosya_url")
     .eq("sirket_id", sirketId)
-    .eq("kategori_id", params.kategori_id)
+    .eq("kategori_id", hedefKategoriId)
     .eq("durum", "aktif")
-    .order("versiyon", { ascending: true });
+    .order("created_at", { ascending: true });
 
   if (params.personel_id) {
     mevcutQuery = mevcutQuery.eq("personel_id", params.personel_id);
@@ -370,26 +509,29 @@ export async function evrakOlustur(params: {
 
   const { data: mevcutlar } = await mevcutQuery;
   const mevcutSayi = mevcutlar?.length ?? 0;
-  const yeniVersiyon = mevcutSayi + 1;
 
-  // Max 3 versiyon — en eskiyi sil
-  if (mevcutSayi >= 3 && mevcutlar) {
-    const enEski = mevcutlar[0];
-    // B2'den sil
-    try {
-      await deleteB2Object(enEski.dosya_url);
-    } catch {
-      // B2 silme hatası log'a yazılır ama işlemi durdurmaz
-      console.error("B2 silme hatası (versiyon limit):", enEski.dosya_url);
+  // Max 2 dosya kuralı: 1 Canlı + 1 Geçmiş.
+  if (mevcutSayi >= 2 && mevcutlar) {
+    const silinecekler = mevcutlar.slice(0, mevcutSayi - 1);
+    for (const enEski of silinecekler) {
+      try {
+        await logKaydet(supabase, sirketId, user.id, null, "versiyon_silindi", {
+          dosya_url: enEski.dosya_url,
+          versiyon: enEski.versiyon,
+          sebep: "Maksimum 2 dosya (1 Canlı + 1 Geçmiş) limiti nedeniyle otomatik silindi",
+        });
+      } catch (logErr) {
+        console.error("Log kaydetme hatası:", logErr);
+      }
+
+      try {
+        await deleteFromB2({ objectKey: enEski.dosya_url });
+      } catch (b2Err) {
+        console.error("B2 silme hatası (2 dosya limiti):", b2Err);
+      }
+
+      await supabase.from("evrak").delete().eq("id", enEski.id);
     }
-    // DB'den sil
-    await supabase.from("evrak").delete().eq("id", enEski.id);
-    // Log
-    await logKaydet(supabase, sirketId, user.id, enEski.id, "versiyon_silindi", {
-      dosya_adi: enEski.dosya_url,
-      versiyon: enEski.versiyon,
-      sebep: "Max 3 versiyon limiti aşıldı",
-    });
   }
 
   // Yeni evrak oluştur
@@ -397,14 +539,14 @@ export async function evrakOlustur(params: {
     .from("evrak")
     .insert({
       sirket_id: sirketId,
-      kategori_id: params.kategori_id,
+      kategori_id: hedefKategoriId,
       personel_id: params.personel_id ?? null,
       employment_period_id: params.employment_period_id ?? null,
       dosya_url: params.dosya_url,
       dosya_adi: params.dosya_adi,
       dosya_boyut: params.dosya_boyut ?? null,
       dosya_tipi: params.dosya_tipi ?? null,
-      versiyon: Math.min(yeniVersiyon, 3),
+      versiyon: Math.min(mevcutSayi + 1, 2),
       baslangic_tarihi: params.baslangic_tarihi ?? null,
       bitis_tarihi: params.bitis_tarihi ?? null,
     })
@@ -418,6 +560,34 @@ export async function evrakOlustur(params: {
     dosya_adi: params.dosya_adi,
     versiyon: data.versiyon,
   });
+
+  // Eğer bu Sağlık Raporu ise ve tetenoz_iceriyor işaretlendiyse, Tetenoz evrağını da otomatik bağla
+  if (params.tetenoz_iceriyor && params.personel_id) {
+    try {
+      const tetKatId = await gercekKategoriIdBulVeyaOlustur(
+        supabase,
+        sirketId,
+        "kat-tetenoz",
+        "Tetenoz Aşı Kartı / Belgesi"
+      );
+
+      // Tetenoz için de aynı dosyayı otomatik evrak olarak ekle
+      await evrakOlustur({
+        kategori_id: tetKatId,
+        personel_id: params.personel_id,
+        employment_period_id: params.employment_period_id,
+        dosya_url: params.dosya_url,
+        dosya_adi: `[Sağlık Raporu İçi] ${params.dosya_adi}`,
+        dosya_boyut: params.dosya_boyut,
+        dosya_tipi: params.dosya_tipi,
+        baslangic_tarihi: params.baslangic_tarihi,
+        bitis_tarihi: params.bitis_tarihi,
+        tetenoz_iceriyor: false, // Rekürsif döngüyü engelle
+      });
+    } catch (tetErr) {
+      console.error("Tetenoz evrağı otomatik bağlama hatası:", tetErr);
+    }
+  }
 
   revalidatePath("/evrak");
   revalidatePath("/personel");
@@ -468,11 +638,22 @@ export async function evrakSil(id: string) {
 
   if (!evrak) return { error: "Evrak bulunamadı." };
 
+  // Log (Silinmeden önce safe log)
+  try {
+    await logKaydet(supabase, sirketId, user.id, null, "silindi", {
+      dosya_adi: evrak.dosya_adi,
+      versiyon: evrak.versiyon,
+      silinen_evrak_id: id,
+    });
+  } catch (logErr) {
+    console.error("Log kaydetme hatası:", logErr);
+  }
+
   // B2'den sil
   try {
-    await deleteB2Object(evrak.dosya_url);
-  } catch {
-    console.error("B2 silme hatası:", evrak.dosya_url);
+    await deleteFromB2({ objectKey: evrak.dosya_url });
+  } catch (b2Err) {
+    console.error("B2 silme hatası:", b2Err);
   }
 
   // DB'den sil
@@ -483,12 +664,6 @@ export async function evrakSil(id: string) {
     .eq("sirket_id", sirketId);
 
   if (error) return { error: `Evrak silme hatası: ${error.message}` };
-
-  // Log
-  await logKaydet(supabase, sirketId, user.id, id, "silindi", {
-    dosya_adi: evrak.dosya_adi,
-    versiyon: evrak.versiyon,
-  });
 
   revalidatePath("/evrak");
   revalidatePath("/personel");
@@ -510,10 +685,21 @@ export async function evrakVersiyonSil(id: string) {
 
   if (!evrak) return { error: "Evrak bulunamadı." };
 
+  // Log (Silinmeden önce safe log)
   try {
-    await deleteB2Object(evrak.dosya_url);
-  } catch {
-    console.error("B2 silme hatası:", evrak.dosya_url);
+    await logKaydet(supabase, sirketId, user.id, null, "versiyon_silindi", {
+      dosya_adi: evrak.dosya_adi,
+      versiyon: evrak.versiyon,
+      silinen_evrak_id: id,
+    });
+  } catch (logErr) {
+    console.error("Log kaydetme hatası:", logErr);
+  }
+
+  try {
+    await deleteFromB2({ objectKey: evrak.dosya_url });
+  } catch (b2Err) {
+    console.error("B2 silme hatası:", b2Err);
   }
 
   const { error } = await supabase
@@ -523,11 +709,6 @@ export async function evrakVersiyonSil(id: string) {
     .eq("sirket_id", sirketId);
 
   if (error) return { error: `Versiyon silme hatası: ${error.message}` };
-
-  await logKaydet(supabase, sirketId, user.id, id, "versiyon_silindi", {
-    dosya_adi: evrak.dosya_adi,
-    versiyon: evrak.versiyon,
-  });
 
   revalidatePath("/evrak");
   revalidatePath("/personel");
@@ -735,7 +916,7 @@ export async function evrakOzetiGetir() {
   // 3. Aktif evrakları al
   const { data: evraklar } = await supabase
     .from("evrak")
-    .select("id, kategori_id, personel_id, bitis_tarihi, versiyon, dosya_url")
+    .select("id, kategori_id, personel_id, bitis_tarihi, versiyon, dosya_url, dosya_adi")
     .eq("sirket_id", sirketId)
     .eq("durum", "aktif")
     .not("personel_id", "is", null);

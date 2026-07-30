@@ -1,148 +1,118 @@
 "use client";
 
 // ─── useFileUpload Hook ──────────────────────────────────────────────────────
-// Presigned URL ile client-side direct B2 upload
-// Progress tracking, dosya validasyonu, hata yönetimi
+// Centralized client-side upload hook.
+// All upload UI components MUST use this hook.
+//
+// Features:
+// - Client-side pre-validation (for immediate UX feedback)
+// - Server-side upload via storageUpload action (full validation there too)
+// - Progress tracking
+// - Reset and cancel
 
 import { useState, useCallback } from "react";
-import { uploadUrlOlustur } from "@/app/actions/upload";
-import { dosyaValidasyonu, b2ObjectKey } from "@/lib/utils/evrak-utils";
-import type { UploadProgress } from "@/types/evrak";
+import { storageUpload } from "@/app/actions/storage";
+import { quickValidateFile } from "@/lib/storage/validation";
+import type { StorageModule, UploadResult } from "@/lib/storage/types";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type UploadStatus = "idle" | "validating" | "uploading" | "success" | "error";
+
+export interface FileUploadProgress {
+  status: UploadStatus;
+  percent: number;
+  error?: string;
+}
 
 interface UseFileUploadOptions {
-  sirketId: string;
-  kategoriId: string;
-  personelId?: string;
-  onSuccess?: (objectKey: string, dosyaAdi: string, dosyaBoyut: number) => void;
-  onError?: (hata: string) => void;
+  /** Storage module (evrak, cari, tersane) */
+  module: StorageModule;
+  /** Entity identifier (personelId, belgeId, etc.) */
+  entityId: string;
+  /** Sub-category (kategoriId, "fatura", etc.) */
+  category: string;
+  /** Called on successful upload */
+  onSuccess?: (result: UploadResult) => void;
+  /** Called on error */
+  onError?: (error: string) => void;
 }
 
 interface UseFileUploadReturn {
-  upload: (dosya: File) => Promise<string | null>;
-  progress: UploadProgress;
-  iptal: () => void;
-  sifirla: () => void;
+  /** Upload a file — returns the UploadResult or null on error */
+  upload: (file: File) => Promise<UploadResult | null>;
+  /** Current upload progress state */
+  progress: FileUploadProgress;
+  /** Cancel the current upload */
+  cancel: () => void;
+  /** Reset progress to idle */
+  reset: () => void;
 }
 
-export function useFileUpload(options: UseFileUploadOptions): UseFileUploadReturn {
-  const { sirketId, kategoriId, personelId, onSuccess, onError } = options;
+// ─── Hook ─────────────────────────────────────────────────────────────────────
 
-  const [progress, setProgress] = useState<UploadProgress>({
-    durum: "bekliyor",
-    yuzde: 0,
+export function useFileUpload(options: UseFileUploadOptions): UseFileUploadReturn {
+  const { module, entityId, category, onSuccess, onError } = options;
+
+  const [progress, setProgress] = useState<FileUploadProgress>({
+    status: "idle",
+    percent: 0,
   });
 
-  const [abortController, setAbortController] = useState<AbortController | null>(null);
-
-  const sifirla = useCallback(() => {
-    setProgress({ durum: "bekliyor", yuzde: 0 });
-    setAbortController(null);
+  const reset = useCallback(() => {
+    setProgress({ status: "idle", percent: 0 });
   }, []);
 
-  const iptal = useCallback(() => {
-    if (abortController) {
-      abortController.abort();
-      setAbortController(null);
-    }
-    sifirla();
-  }, [abortController, sifirla]);
+  const cancel = useCallback(() => {
+    reset();
+  }, [reset]);
 
   const upload = useCallback(
-    async (dosya: File): Promise<string | null> => {
-      // 1. Validasyon
-      const validasyonHatasi = dosyaValidasyonu(dosya);
-      if (validasyonHatasi) {
-        setProgress({ durum: "hata", yuzde: 0, hata: validasyonHatasi });
-        onError?.(validasyonHatasi);
+    async (file: File): Promise<UploadResult | null> => {
+      // 1. Client-side quick validation (UX only — server validates too)
+      setProgress({ status: "validating", percent: 10 });
+
+      const quickError = quickValidateFile(file);
+      if (quickError) {
+        setProgress({ status: "error", percent: 0, error: quickError });
+        onError?.(quickError);
         return null;
       }
 
-      // 2. Object key oluştur
-      const uuid = crypto.randomUUID();
-      const objectKey = b2ObjectKey({
-        sirketId,
-        personelId,
-        kategoriId,
-        dosyaAdi: dosya.name,
-        uuid,
-      });
-
       try {
-        setProgress({ durum: "yukleniyor", yuzde: 5 });
+        setProgress({ status: "uploading", percent: 30 });
 
-        // 3. Presigned URL al
-        const result = await uploadUrlOlustur({
-          objectKey,
-          contentType: dosya.type,
-        });
+        // 2. Build FormData for server action
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("module", module);
+        formData.append("entityId", entityId);
+        formData.append("category", category);
 
-        if ("error" in result) {
+        setProgress({ status: "uploading", percent: 60 });
+
+        // 3. Server action handles: auth → validation → key generation → B2 upload → logging
+        const result = await storageUpload(formData);
+
+        if (!result.success) {
           throw new Error(result.error);
         }
 
-        setProgress({ durum: "yukleniyor", yuzde: 15 });
+        // 4. Success
+        setProgress({ status: "success", percent: 100 });
+        onSuccess?.(result.data);
 
-        // 4. Direct upload via XMLHttpRequest (progress tracking için)
-        const controller = new AbortController();
-        setAbortController(controller);
-
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-
-          xhr.upload.addEventListener("progress", (e) => {
-            if (e.lengthComputable) {
-              // 15-95 arası progress
-              const yuzde = Math.round(15 + (e.loaded / e.total) * 80);
-              setProgress({ durum: "yukleniyor", yuzde });
-            }
-          });
-
-          xhr.addEventListener("load", () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              resolve();
-            } else {
-              reject(new Error(`Yükleme başarısız: HTTP ${xhr.status}`));
-            }
-          });
-
-          xhr.addEventListener("error", () => {
-            reject(new Error("Ağ hatası oluştu."));
-          });
-
-          xhr.addEventListener("abort", () => {
-            reject(new Error("Yükleme iptal edildi."));
-          });
-
-          // Abort controller bağlantısı
-          controller.signal.addEventListener("abort", () => xhr.abort());
-
-          xhr.open("PUT", result.url);
-          xhr.setRequestHeader("Content-Type", dosya.type);
-          xhr.send(dosya);
-        });
-
-        // 5. Başarılı
-        setProgress({ durum: "tamamlandi", yuzde: 100 });
-        setAbortController(null);
-        onSuccess?.(objectKey, dosya.name, dosya.size);
-
-        return objectKey;
+        return result.data;
       } catch (err) {
-        const hata = err instanceof Error ? err.message : "Bilinmeyen hata oluştu.";
-
-        // İptal edilmişse sessizce dur
-        if (hata === "Yükleme iptal edildi.") {
-          sifirla();
-          return null;
-        }
-
-        setProgress({ durum: "hata", yuzde: 0, hata });
-        onError?.(hata);
+        const error =
+          err instanceof Error ? err.message : "Bilinmeyen hata oluştu.";
+        setProgress({ status: "error", percent: 0, error });
+        onError?.(error);
         return null;
       }
     },
-    [sirketId, kategoriId, personelId, onSuccess, onError, sifirla]
+    [module, entityId, category, onSuccess, onError]
   );
 
-  return { upload, progress, iptal, sifirla };
+  return { upload, progress, cancel, reset };
 }

@@ -6,9 +6,9 @@ import {
   type Evrak,
   type EvrakKategori,
   EVRAK_YAKLASAN_ESIK_GUN,
-  EVRAK_MAX_DOSYA_BOYUT,
-  EVRAK_KABUL_EDILEN_TIPLER,
 } from "@/types/evrak";
+import { quickValidateFile } from "@/lib/storage/validation";
+import { generateObjectKey } from "@/lib/storage/object-key";
 
 // ─── Geçerlilik Durumu Hesaplama ──────────────────────────────────────────────
 
@@ -162,24 +162,11 @@ export function onayDurumRengi(durum: string): {
 // ─── Dosya Validasyonu ────────────────────────────────────────────────────────
 
 /**
- * Dosya tipi ve boyut validasyonu yapar.
- * Başarılıysa null, hatalıysa hata mesajı döner.
+ * @deprecated Bu fonksiyon kaldırıldı. Yeni sistemde `quickValidateFile` kullanın.
+ * @see {@link quickValidateFile} from "@/lib/storage"
  */
 export function dosyaValidasyonu(dosya: File): string | null {
-  // Boyut kontrolü
-  if (dosya.size > EVRAK_MAX_DOSYA_BOYUT) {
-    const maxMB = EVRAK_MAX_DOSYA_BOYUT / (1024 * 1024);
-    const dosyaMB = (dosya.size / (1024 * 1024)).toFixed(1);
-    return `Dosya boyutu çok büyük (${dosyaMB}MB). Maksimum ${maxMB}MB.`;
-  }
-
-  // Tip kontrolü
-  const kabulEdilen = EVRAK_KABUL_EDILEN_TIPLER as readonly string[];
-  if (!kabulEdilen.includes(dosya.type)) {
-    return "Desteklenmeyen dosya formatı. PDF, DOCX, XLSX, PNG veya JPG yükleyin.";
-  }
-
-  return null;
+  return quickValidateFile(dosya);
 }
 
 /**
@@ -216,20 +203,27 @@ export function dosyaTipiIkonu(dosyaTipi: string | null): string {
 // ─── B2 Object Key ────────────────────────────────────────────────────────────
 
 /**
- * Backblaze B2 için object key oluşturur.
- * Format: {sirketId}/evrak/{personelId|sirket}/{kategoriId}/{uuid}.{ext}
+ * @deprecated Bu fonksiyon kaldırıldı. Yeni sistemde `generateObjectKey` kullanın.
+ * @see {@link generateObjectKey} from "@/lib/storage"
+ *
+ * Eski format: {sirketId}/evrak/{personelId|sirket}/{kategoriId}/{uuid}.{ext}
+ * Yeni format: {companyId}/{module}/{entityId}/{category}/{uuid}.{ext}
  */
 export function b2ObjectKey(params: {
   sirketId: string;
   personelId?: string;
   kategoriId: string;
   dosyaAdi: string;
-  uuid: string;
+  uuid?: string;
 }): string {
-  const { sirketId, personelId, kategoriId, dosyaAdi, uuid } = params;
-  const uzanti = dosyaUzantisi(dosyaAdi);
-  const sahip = personelId ?? "sirket";
-  return `${sirketId}/evrak/${sahip}/${kategoriId}/${uuid}.${uzanti}`;
+  const { sirketId, personelId, kategoriId, dosyaAdi } = params;
+  return generateObjectKey({
+    companyId: sirketId,
+    module: "evrak",
+    entityId: personelId ?? "sirket",
+    category: kategoriId,
+    fileName: dosyaAdi,
+  });
 }
 
 // ─── Kalan Gün Hesaplama ──────────────────────────────────────────────────────

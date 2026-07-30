@@ -16,7 +16,7 @@ export default function SifreGuncellePage() {
         <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
           <span className="text-zinc-950 font-black text-sm leading-none">H</span>
         </div>
-        <span className="text-white font-semibold tracking-tight">Hilal İK</span>
+        <span className="text-white font-semibold tracking-tight">Hilal Office</span>
       </div>
 
       {state?.basarili ? (

@@ -8,7 +8,7 @@
 import { createClient } from "@/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { deleteB2Object, getDownloadPresignedUrl } from "@/lib/storage/b2";
+import { deleteFromB2, getPresignedDownloadUrl } from "@/lib/storage";
 import { ozlukPaketiOlustur } from "@/lib/templates/ozluk-generator";
 import type { OzlukGirdisi } from "@/lib/templates/ozluk-generator";
 
@@ -117,7 +117,7 @@ export async function tersaneSablonSil(id: string) {
   if (belgeler) {
     for (const belge of belgeler) {
       if (belge.sablon_dosya_url) {
-        try { await deleteB2Object(belge.sablon_dosya_url); } catch { /* ignore */ }
+        try { await deleteFromB2({ objectKey: belge.sablon_dosya_url }); } catch { /* ignore */ }
       }
     }
     await supabase
@@ -193,7 +193,7 @@ export async function ozelBelgeSil(id: string) {
     .single();
 
   if (belge?.sablon_dosya_url) {
-    try { await deleteB2Object(belge.sablon_dosya_url); } catch { /* ignore */ }
+    try { await deleteFromB2({ objectKey: belge.sablon_dosya_url }); } catch { /* ignore */ }
   }
 
   const { error } = await supabase

@@ -11,22 +11,20 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "Hilal Muhasebe Yönetim Sistemleri",
-    template: "%s | Hilal",
+    default: "Hilal Office",
+    template: "%s — Hilal Office",
   },
   description:
     "Profesyonel çok firmalı İnsan Kaynakları ve Bordro Yönetim Sistemi",
 
   icons: {
     icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/favicon.png", type: "image/png", sizes: "512x512" },
-      { url: "/android-chrome-192x192.png", type: "image/png", sizes: "192x192" },
-      { url: "/android-chrome-512x512.png", type: "image/png", sizes: "512x512" },
+      { url: "/test/fav.png", type: "image/png", sizes: "any" },
     ],
     apple: [
-      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/test/fav.png", sizes: "180x180", type: "image/png" },
     ],
+    shortcut: "/test/fav.png",
   },
 };
 

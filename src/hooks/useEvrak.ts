@@ -78,7 +78,8 @@ export function useEvrakKategoriMutations() {
   });
 
   const sil = useMutation({
-    mutationFn: evrakKategoriSil,
+    mutationFn: ({ id, force }: { id: string; force?: boolean }) =>
+      evrakKategoriSil(id, force),
     onSuccess: (result) => {
       if ("error" in result) {
         toast.error(result.error);

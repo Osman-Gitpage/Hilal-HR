@@ -117,6 +117,7 @@ export function OdemeEkleModal({
                 <SelectContent>
                   <SelectItem value="banka">Banka</SelectItem>
                   <SelectItem value="elden">Elden</SelectItem>
+                  <SelectItem value="cek">Çek</SelectItem>
                 </SelectContent>
               </Select>
             </div>

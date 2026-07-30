@@ -5,7 +5,7 @@ import JSZip from "jszip";
 import { docxSablonDoldur, sablonVerisiOlustur } from "./docx-template";
 import { pdfBirlestir } from "./pdf-merge";
 import { pdfGorselEkle } from "./pdf-form";
-import { getDownloadPresignedUrl } from "@/lib/storage/b2";
+import { getPresignedDownloadUrl } from "@/lib/storage";
 
 /** Özlük paketi oluşturma girdisi */
 export interface OzlukGirdisi {
@@ -55,7 +55,7 @@ export interface OzlukCiktisi {
  * B2'den dosya indir → Uint8Array olarak döndür.
  */
 async function b2DosyaIndir(objectKey: string): Promise<Uint8Array> {
-  const url = await getDownloadPresignedUrl(objectKey);
+  const url = await getPresignedDownloadUrl({ objectKey });
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Dosya indirilemedi: ${objectKey} (HTTP ${response.status})`);

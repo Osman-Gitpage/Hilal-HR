@@ -1,9 +1,8 @@
 "use client";
 
-// ─── Evrak Kategori Ayarları ──────────────────────────────────────────────────
-// Evrak kategorilerini yönetme: listeleme, ekleme, düzenleme, silme, sıralama
+// ─── Evrak Kategori Ayarları (Modern Premium UI) ─────────────────────────────
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import {
   useEvrakKategorileri,
   useEvrakKategoriMutations,
@@ -23,7 +22,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -59,12 +57,11 @@ import {
   Building2,
   Clock,
   Shield,
-  ArrowUpDown,
+  FolderTree,
+  CheckCircle2,
+  Sparkles,
+  ShieldCheck,
 } from "lucide-react";
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// ANA BİLEŞEN
-// ═══════════════════════════════════════════════════════════════════════════════
 
 export function EvrakKategoriAyarlar() {
   const { data: kategoriler, isLoading } = useEvrakKategorileri();
@@ -72,8 +69,23 @@ export function EvrakKategoriAyarlar() {
   const [duzenlenecek, setDuzenlenecek] = useState<EvrakKategori | null>(null);
   const [silinecek, setSilinecek] = useState<EvrakKategori | null>(null);
 
-  const personelKategorileri = (kategoriler?.filter((k) => k.tip === "personel") ?? []) as unknown as EvrakKategori[];
-  const sirketKategorileri = (kategoriler?.filter((k) => k.tip === "sirket") ?? []) as unknown as EvrakKategori[];
+  const personelKategorileri = useMemo(
+    () => (kategoriler?.filter((k) => k.tip === "personel") ?? []) as unknown as EvrakKategori[],
+    [kategoriler]
+  );
+
+  const sirketKategorileri = useMemo(
+    () => (kategoriler?.filter((k) => k.tip === "sirket") ?? []) as unknown as EvrakKategori[],
+    [kategoriler]
+  );
+
+  const stats = useMemo(() => {
+    const list = (kategoriler ?? []) as unknown as EvrakKategori[];
+    const toplam = list.length;
+    const zorunlu = list.filter((k) => k.zorunlu).length;
+    const sureli = list.filter((k) => k.sureli).length;
+    return { toplam, zorunlu, sureli };
+  }, [kategoriler]);
 
   const handleDuzenle = (kategori: EvrakKategori) => {
     setDuzenlenecek(kategori);
@@ -87,44 +99,104 @@ export function EvrakKategoriAyarlar() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4 max-w-3xl">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-48 w-full rounded-xl" />
-        <Skeleton className="h-48 w-full rounded-xl" />
+      <div className="space-y-4 max-w-4xl">
+        <Skeleton className="h-10 w-64 rounded-xl" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Skeleton className="h-20 rounded-2xl" />
+          <Skeleton className="h-20 rounded-2xl" />
+          <Skeleton className="h-20 rounded-2xl" />
+        </div>
+        <Skeleton className="h-64 w-full rounded-2xl" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      {/* Başlık ve Ekle Butonu */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold">Evrak Kategorileri</h3>
-          <p className="text-sm text-muted-foreground">
-            Personel ve şirket evrakları için kategori tanımları.
-          </p>
+    <div className="space-y-6 max-w-4xl">
+      {/* ── Üst Başlık & Ekle Butonu ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#7c3aed]/10 text-[#7c3aed] flex items-center justify-center border border-[#7c3aed]/20 shadow-2xs shrink-0">
+            <FolderTree className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-zinc-900 dark:text-white">
+              Evrak Kategorileri
+            </h3>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              Personel özlük dosyası ve şirket resmi evrak tiplerini yönetin.
+            </p>
+          </div>
         </div>
-        <Button onClick={() => setFormAcik(true)} size="sm" className="gap-2">
+
+        <Button
+          onClick={() => setFormAcik(true)}
+          className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white text-xs font-semibold rounded-xl h-9 px-4 gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95 shrink-0"
+        >
           <Plus className="h-4 w-4" />
-          Yeni Kategori
+          Yeni Kategori Ekle
         </Button>
       </div>
 
-      {/* Personel Kategorileri */}
+      {/* ── 3 Özet İstatistik Kartı ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="p-4 rounded-2xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/30 flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+              Toplam Kategori
+            </span>
+            <h4 className="text-xl font-bold text-zinc-900 dark:text-white mt-0.5">
+              {stats.toplam}
+            </h4>
+          </div>
+          <div className="w-9 h-9 rounded-xl bg-purple-100 dark:bg-purple-900/40 text-[#7c3aed] flex items-center justify-center">
+            <FolderTree className="w-4 h-4" />
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-rose-50/60 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+              Zorunlu Evraklar
+            </span>
+            <h4 className="text-xl font-bold text-zinc-900 dark:text-white mt-0.5">
+              {stats.zorunlu}
+            </h4>
+          </div>
+          <div className="w-9 h-9 rounded-xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 flex items-center justify-center">
+            <Shield className="w-4 h-4" />
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+              Süreli Evraklar
+            </span>
+            <h4 className="text-xl font-bold text-zinc-900 dark:text-white mt-0.5">
+              {stats.sureli}
+            </h4>
+          </div>
+          <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 flex items-center justify-center">
+            <Clock className="w-4 h-4" />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Personel Evrak Kategorileri Grubu ── */}
       <KategoriGrubu
-        baslik="Personel Evrakları"
-        aciklama="Personel özlük dosyasında bulunan evrak tipleri."
-        icon={<FileText className="h-5 w-5 text-blue-500" />}
+        baslik="Personel Evrak Kategorileri"
+        aciklama="Personel özlük dosyası ve yasal çalışma belgeleri kategorileri."
+        icon={<FileText className="h-5 w-5 text-[#7c3aed]" />}
         kategoriler={personelKategorileri}
         onDuzenle={handleDuzenle}
         onSil={setSilinecek}
       />
 
-      {/* Şirket Kategorileri */}
+      {/* ── Şirket Evrak Kategorileri Grubu ── */}
       <KategoriGrubu
-        baslik="Şirket Evrakları"
-        aciklama="Şirket genelindeki resmi belgeler."
+        baslik="Şirket Resmi Evrak Kategorileri"
+        aciklama="Şirket geneli resmi belgeler, ruhsat ve vergi levhaları."
         icon={<Building2 className="h-5 w-5 text-emerald-500" />}
         kategoriler={sirketKategorileri}
         onDuzenle={handleDuzenle}
@@ -147,10 +219,9 @@ export function EvrakKategoriAyarlar() {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// KATEGORİ GRUBU
-// ═══════════════════════════════════════════════════════════════════════════════
-
+// ─────────────────────────────────────────────
+// Kategori Grubu Bileşeni
+// ─────────────────────────────────────────────
 function KategoriGrubu({
   baslik,
   aciklama,
@@ -167,33 +238,45 @@ function KategoriGrubu({
   onSil: (k: EvrakKategori) => void;
 }) {
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          {icon}
-          <CardTitle className="text-base">{baslik}</CardTitle>
-          <Badge variant="secondary" className="ml-auto">
-            {kategoriler.length}
+    <Card className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xs overflow-hidden">
+      <CardHeader className="pb-3 border-b border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/40 dark:bg-zinc-800/20">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
+              {icon}
+            </div>
+            <div>
+              <CardTitle className="text-sm font-bold text-zinc-900 dark:text-white">
+                {baslik}
+              </CardTitle>
+              <CardDescription className="text-xs text-zinc-400 mt-0.5">
+                {aciklama}
+              </CardDescription>
+            </div>
+          </div>
+          <Badge
+            variant="secondary"
+            className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
+          >
+            {kategoriler.length} Kategori
           </Badge>
         </div>
-        <CardDescription>{aciklama}</CardDescription>
       </CardHeader>
-      <CardContent>
+
+      <CardContent className="p-3">
         {kategoriler.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">
+          <p className="text-xs text-zinc-400 py-6 text-center">
             Henüz kategori tanımlanmamış.
           </p>
         ) : (
-          <div className="space-y-1">
-            {kategoriler.map((kategori, index) => (
-              <div key={kategori.id}>
-                {index > 0 && <Separator className="my-1" />}
-                <KategoriSatir
-                  kategori={kategori}
-                  onDuzenle={() => onDuzenle(kategori)}
-                  onSil={() => onSil(kategori)}
-                />
-              </div>
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+            {kategoriler.map((kategori) => (
+              <KategoriSatir
+                key={kategori.id}
+                kategori={kategori}
+                onDuzenle={() => onDuzenle(kategori)}
+                onSil={() => onSil(kategori)}
+              />
             ))}
           </div>
         )}
@@ -202,10 +285,9 @@ function KategoriGrubu({
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// KATEGORİ SATIRI
-// ═══════════════════════════════════════════════════════════════════════════════
-
+// ─────────────────────────────────────────────
+// Kategori Satırı Bileşeni
+// ─────────────────────────────────────────────
 function KategoriSatir({
   kategori,
   onDuzenle,
@@ -216,72 +298,66 @@ function KategoriSatir({
   onSil: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 py-2 px-1 rounded-md hover:bg-muted/50 transition-colors group">
-      {/* Sıralama tutamacı */}
-      <GripVertical className="h-4 w-4 text-muted-foreground/40 cursor-grab" />
-
-      {/* Sıra numarası */}
-      <span className="text-xs text-muted-foreground w-5 text-center font-mono">
-        {kategori.sira}
-      </span>
-
-      {/* Kategori adı */}
-      <span className="font-medium text-sm flex-1">{kategori.ad}</span>
-
-      {/* Etiketler */}
-      <div className="flex items-center gap-1.5">
-        {kategori.zorunlu && (
-          <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-5 gap-1">
-            <Shield className="h-3 w-3" />
-            Zorunlu
-          </Badge>
-        )}
-        {kategori.sureli ? (
-          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 gap-1">
-            <Clock className="h-3 w-3" />
-            {sureEtiketi(kategori.varsayilan_sure)}
-          </Badge>
-        ) : (
-          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">
-            Süresiz
-          </Badge>
-        )}
-        {!kategori.aktif && (
-          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 opacity-60">
-            Pasif
-          </Badge>
-        )}
+    <div className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors group">
+      <div className="flex items-center gap-3 min-w-0">
+        <GripVertical className="h-4 w-4 text-zinc-300 dark:text-zinc-600 cursor-grab shrink-0" />
+        <span className="text-xs font-mono font-bold text-zinc-400 w-5">
+          #{kategori.sira}
+        </span>
+        <span className="font-semibold text-xs text-zinc-900 dark:text-white truncate">
+          {kategori.ad}
+        </span>
       </div>
 
-      {/* Aksiyonlar */}
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={onDuzenle}
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-destructive hover:text-destructive"
-          onClick={onSil}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
+      <div className="flex items-center gap-3 shrink-0">
+        {/* Badges */}
+        <div className="flex items-center gap-1.5">
+          {kategori.zorunlu && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900 text-[10px] font-semibold">
+              <Shield className="h-3 w-3" />
+              Zorunlu
+            </span>
+          )}
+          {kategori.sureli ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900 text-[10px] font-semibold">
+              <Clock className="h-3 w-3" />
+              {sureEtiketi(kategori.varsayilan_sure)}
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 text-[10px] font-medium">
+              Süresiz
+            </span>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-1 opacity-80 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={onDuzenle}
+            className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200/60 dark:hover:bg-zinc-700/60 transition-colors cursor-pointer"
+            title="Düzenle"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={onSil}
+            className="p-1.5 rounded-lg text-rose-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+            title="Sil"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// KATEGORİ FORM DİALOG (Ekle/Düzenle)
-// ═══════════════════════════════════════════════════════════════════════════════
-
+// ─────────────────────────────────────────────
+// Kategori Form Dialog (Ekle / Düzenle)
+// ─────────────────────────────────────────────
 const SURE_SECENEKLERI = [
-  { label: "6 Ay", gun: 180 },
+  { label: "3 Ay (Min)", gun: 90 },
+  { label: "6 Ay (Max/Standart)", gun: 180 },
   { label: "1 Yıl", gun: 365 },
   { label: "2 Yıl", gun: 730 },
   { label: "Özel", gun: -1 },
@@ -311,7 +387,6 @@ function KategoriFormDialog({
   });
   const [ozelGun, setOzelGun] = useState(kategori?.varsayilan_sure ?? 90);
 
-  // Dialog açıldığında formu resetle
   const resetForm = useCallback(() => {
     setAd(kategori?.ad ?? "");
     setTip(kategori?.tip ?? "personel");
@@ -328,7 +403,12 @@ function KategoriFormDialog({
     }
   }, [kategori]);
 
-  // Dialog state değiştiğinde resetle
+  useEffect(() => {
+    if (acik) {
+      resetForm();
+    }
+  }, [acik, resetForm]);
+
   const handleOpenChange = (open: boolean) => {
     if (open) {
       resetForm();
@@ -373,98 +453,99 @@ function KategoriFormDialog({
 
   return (
     <Dialog open={acik} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {duzenleModu ? "Kategori Düzenle" : "Yeni Kategori Ekle"}
+      <DialogContent className="sm:max-w-md p-0 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-zinc-100 dark:border-zinc-800 bg-gradient-to-r from-purple-50/40 via-white to-indigo-50/40 dark:from-zinc-900 dark:to-zinc-900">
+          <DialogTitle className="text-base font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+            <FolderTree className="w-5 h-5 text-[#7c3aed]" />
+            {duzenleModu ? "Kategori Düzenle" : "Yeni Evrak Kategorisi Ekle"}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-xs text-zinc-400 mt-0.5">
             {duzenleModu
-              ? "Kategori bilgilerini güncelleyin."
-              : "Yeni bir evrak kategorisi tanımlayın."}
+              ? "Kategori tanımını ve geçerlilik şartlarını güncelleyin."
+              : "Evrak klasörleme sistemi için yeni bir kategori oluşturun."}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="p-6 space-y-4">
           {/* Ad */}
-          <div className="space-y-2">
-            <Label htmlFor="kategori-ad">Kategori Adı</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="kategori-ad" className="text-xs font-bold text-zinc-900 dark:text-white">
+              Kategori Adı *
+            </Label>
             <Input
               id="kategori-ad"
               value={ad}
               onChange={(e) => setAd(e.target.value)}
-              placeholder="örn: Adli Sicil, Sağlık Raporu"
+              placeholder="örn: Adli Sicil Kaydı, SGK İşe Giriş"
+              className="text-xs h-10 rounded-xl border-zinc-200 dark:border-zinc-700"
             />
           </div>
 
-          {/* Tip (sadece yeni ekleme modunda) */}
+          {/* Tip */}
           {!duzenleModu && (
-            <div className="space-y-2">
-              <Label>Kategori Tipi</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-zinc-900 dark:text-white">Kategori Tipi</Label>
               <Select
                 value={tip}
                 onValueChange={(v) => setTip(v as EvrakKategoriTip)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="h-10 text-xs rounded-xl border-zinc-200 dark:border-zinc-700">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="personel">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      Personel Evrakı
-                    </div>
+                <SelectContent className="rounded-xl border border-zinc-200 dark:border-zinc-800">
+                  <SelectItem value="personel" className="text-xs">
+                    Personel Evrakı
                   </SelectItem>
-                  <SelectItem value="sirket">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4" />
-                      Şirket Evrakı
-                    </div>
+                  <SelectItem value="sirket" className="text-xs">
+                    Şirket Evrakı
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
           )}
 
-          <Separator />
-
-          {/* Zorunlu */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="zorunlu">Zorunlu Evrak</Label>
-              <p className="text-xs text-muted-foreground">
-                Bu evrak yüklenmemiş personeller eksik olarak işaretlenir.
-              </p>
+          {/* Switches */}
+          <div className="pt-2 space-y-3 border-t border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200/60 dark:border-zinc-700/60">
+              <div className="space-y-0.5">
+                <Label htmlFor="zorunlu" className="text-xs font-bold text-zinc-900 dark:text-white cursor-pointer">
+                  Zorunlu Evrak
+                </Label>
+                <p className="text-[11px] text-zinc-400">
+                  Eksik olduğunda uyarı verir.
+                </p>
+              </div>
+              <Switch
+                id="zorunlu"
+                checked={zorunlu}
+                onCheckedChange={setZorunlu}
+              />
             </div>
-            <Switch
-              id="zorunlu"
-              checked={zorunlu}
-              onCheckedChange={setZorunlu}
-            />
+
+            <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200/60 dark:border-zinc-700/60">
+              <div className="space-y-0.5">
+                <Label htmlFor="sureli" className="text-xs font-bold text-zinc-900 dark:text-white cursor-pointer">
+                  Süreli Evrak
+                </Label>
+                <p className="text-[11px] text-zinc-400">
+                  Son geçerlilik tarihi bulunur.
+                </p>
+              </div>
+              <Switch
+                id="sureli"
+                checked={sureli}
+                onCheckedChange={setSureli}
+              />
+            </div>
           </div>
 
-          {/* Süreli */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="sureli">Süreli Evrak</Label>
-              <p className="text-xs text-muted-foreground">
-                Geçerlilik süresi olan evraklar (sağlık raporu, vergi levhası vb.)
-              </p>
-            </div>
-            <Switch
-              id="sureli"
-              checked={sureli}
-              onCheckedChange={setSureli}
-            />
-          </div>
-
-          {/* Süre seçimi */}
+          {/* Varsayılan Süre Seçimi */}
           {sureli && (
-            <div className="space-y-3 pl-1 border-l-2 border-primary/20 ml-2">
-              <Label className="text-xs text-muted-foreground ml-3">
+            <div className="p-3.5 rounded-xl bg-purple-50/40 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/30 space-y-2.5">
+              <Label className="text-xs font-bold text-purple-950 dark:text-purple-200">
                 Varsayılan Geçerlilik Süresi
               </Label>
-              <div className="flex flex-wrap gap-2 ml-3">
+              <div className="flex flex-wrap gap-1.5">
                 {SURE_SECENEKLERI.map((secenek) => (
                   <Button
                     key={secenek.gun}
@@ -472,41 +553,54 @@ function KategoriFormDialog({
                     variant={sureSecim === secenek.gun ? "default" : "outline"}
                     size="sm"
                     onClick={() => setSureSecim(secenek.gun)}
+                    className={`h-7 px-3 text-xs rounded-lg transition-all cursor-pointer ${
+                      sureSecim === secenek.gun
+                        ? "bg-[#7c3aed] text-white"
+                        : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300"
+                    }`}
                   >
                     {secenek.label}
                   </Button>
                 ))}
               </div>
               {sureSecim === -1 && (
-                <div className="flex items-center gap-2 ml-3">
+                <div className="flex items-center gap-2 pt-1">
                   <Input
                     type="number"
                     min={1}
                     max={3650}
                     value={ozelGun}
                     onChange={(e) => setOzelGun(Number(e.target.value))}
-                    className="w-24"
+                    className="w-24 h-8 text-xs rounded-lg"
                   />
-                  <span className="text-sm text-muted-foreground">gün</span>
+                  <span className="text-xs text-zinc-400">gün</span>
                 </div>
               )}
             </div>
           )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onKapat} disabled={isLoading}>
+        <DialogFooter className="px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onKapat}
+            disabled={isLoading}
+            className="h-9 px-4 text-xs font-medium rounded-xl border-zinc-200 dark:border-zinc-700 cursor-pointer"
+          >
             İptal
           </Button>
           <Button
+            type="button"
             onClick={handleKaydet}
             disabled={!ad.trim() || isLoading}
+            className="h-9 px-5 bg-[#7c3aed] hover:bg-[#6d28d9] text-white text-xs font-semibold rounded-xl transition-all cursor-pointer shadow-2xs"
           >
             {isLoading
               ? "Kaydediliyor…"
               : duzenleModu
               ? "Güncelle"
-              : "Ekle"}
+              : "Kaydet"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -514,10 +608,9 @@ function KategoriFormDialog({
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// KATEGORİ SİLME ONAY DİALOG
-// ═══════════════════════════════════════════════════════════════════════════════
-
+// ─────────────────────────────────────────────
+// Kategori Silme Onay Dialog
+// ─────────────────────────────────────────────
 function KategoriSilDialog({
   kategori,
   onKapat,
@@ -526,33 +619,75 @@ function KategoriSilDialog({
   onKapat: () => void;
 }) {
   const { sil } = useEvrakKategoriMutations();
+  const [hataMesaji, setHataMesaji] = useState<string | null>(null);
 
-  const handleSil = async () => {
+  const handleSil = async (force: boolean = false) => {
     if (!kategori) return;
-    await sil.mutateAsync(kategori.id);
+    setHataMesaji(null);
+    const res = await sil.mutateAsync({ id: kategori.id, force });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (res && (res as any).error) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setHataMesaji((res as any).error);
+    } else {
+      handleKapat();
+    }
+  };
+
+  const handleKapat = () => {
+    setHataMesaji(null);
     onKapat();
   };
 
   return (
-    <AlertDialog open={!!kategori} onOpenChange={(open) => !open && onKapat()}>
-      <AlertDialogContent>
+    <AlertDialog open={!!kategori} onOpenChange={(open) => !open && handleKapat()}>
+      <AlertDialogContent className="sm:max-w-md rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
         <AlertDialogHeader>
-          <AlertDialogTitle>Kategori Silinsin mi?</AlertDialogTitle>
-          <AlertDialogDescription>
-            <span className="font-semibold">&quot;{kategori?.ad}&quot;</span>{" "}
-            kategorisi kalıcı olarak silinecek. Bu kategoriye bağlı evrak
-            varsa silme işlemi engellenecektir.
+          <AlertDialogTitle className="text-base font-bold text-zinc-900 dark:text-white">
+            Kategori Silinsin mi?
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-xs text-zinc-400 mt-1">
+            "{kategori?.ad}" kategorisi silinecektir.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={sil.isPending}>İptal</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={handleSil}
+
+        {hataMesaji && (
+          <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-300 text-xs space-y-1 my-2">
+            <span className="font-semibold block">⚠️ İlişkili Kayıt Uyarısı:</span>
+            <span className="text-[11px] block">{hataMesaji}</span>
+            <span className="text-[11px] text-zinc-500 dark:text-zinc-400 pt-1 block">
+              B2 nesneleri olmasa dahi veritabanındaki ilişkili evrak kayıtları temizlenerek kategori silinebilir.
+            </span>
+          </div>
+        )}
+
+        <AlertDialogFooter className="mt-4 gap-2 flex-col sm:flex-row">
+          <AlertDialogCancel
+            onClick={handleKapat}
             disabled={sil.isPending}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            className="h-9 text-xs rounded-xl border-zinc-200 dark:border-zinc-700 cursor-pointer"
           >
-            {sil.isPending ? "Siliniyor…" : "Sil"}
-          </AlertDialogAction>
+            İptal
+          </AlertDialogCancel>
+
+          {hataMesaji ? (
+            <Button
+              type="button"
+              onClick={() => handleSil(true)}
+              disabled={sil.isPending}
+              className="h-9 text-xs rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold cursor-pointer gap-1.5 shadow-2xs"
+            >
+              {sil.isPending ? "Temizleniyor…" : "İlişkili Kayıtlarla Birlikte Sil"}
+            </Button>
+          ) : (
+            <AlertDialogAction
+              onClick={() => handleSil(false)}
+              disabled={sil.isPending}
+              className="h-9 text-xs rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold cursor-pointer"
+            >
+              {sil.isPending ? "Siliniyor…" : "Kategoriyi Sil"}
+            </AlertDialogAction>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

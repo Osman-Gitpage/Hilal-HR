@@ -18,6 +18,7 @@ import type {
   CariKpi,
   BelgePayload,
   OdemePayload,
+  OdemeYontem,
   TopluOdemePayload,
   DosyaPayload,
   BelgeListFiltre,
@@ -210,7 +211,7 @@ export async function belgeListesiGetir(
       id, tur, belge_no, tarih, aciklama, gemi_adi, tutar, para_birimi, kur, notlar,
       firma_id, created_at, updated_at,
       firma ( id, ad ),
-      odeme ( tutar, kur )
+      odeme ( id, tarih, tutar, para_birimi, kur, yontem, aciklama )
     `)
     .eq("sirket_id", sirketId)
     .order("tarih", { ascending: false });
@@ -234,16 +235,16 @@ export async function belgeListesiGetir(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let sonuc: BelgeListItem[] = (data ?? []).map((b: any) => {
-    const odemeler: Odeme[] = (b.odeme ?? []).map((o: { tutar: number; kur: number }) => ({
-      id: "",
+    const odemeler: Odeme[] = (b.odeme ?? []).map((o: any) => ({
+      id: o.id ?? "",
       sirket_id: sirketId,
       belge_id: b.id,
-      tarih: "",
+      tarih: o.tarih ?? b.tarih,
       tutar: Number(o.tutar),
-      para_birimi: "TRY" as ParaBirimi,
-      kur: Number(o.kur),
-      yontem: "banka" as const,
-      aciklama: null,
+      para_birimi: (o.para_birimi as ParaBirimi) || b.para_birimi || "TRY",
+      kur: Number(o.kur ?? 1),
+      yontem: (o.yontem as OdemeYontem) ?? "banka",
+      aciklama: o.aciklama ?? null,
       created_at: "",
     }));
 
@@ -275,12 +276,29 @@ export async function belgeListesiGetir(
       kalan,
       odeme_durumu: durum,
       gecikmiş: isGecikmiş(b.tarih, durum),
+      odemeler,
     };
   });
 
-  // İstemci tarafı filtreler (arama & durum)
-  if (filtre?.durum) {
-    sonuc = sonuc.filter((b) => b.odeme_durumu === filtre.durum);
+  // İstemci tarafı filtreler (arama & durum — %2C ve virgül ayrıştırma güvencesi)
+  let hedefDurumlar: string[] = [];
+  if (filtre?.durumlar && filtre.durumlar.length > 0) {
+    hedefDurumlar = filtre.durumlar.flatMap((d) =>
+      decodeURIComponent(d)
+        .replace(/%2C/gi, ",")
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+    ).filter(Boolean);
+  } else if (filtre?.durum) {
+    hedefDurumlar = decodeURIComponent(filtre.durum)
+      .replace(/%2C/gi, ",")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  if (hedefDurumlar.length > 0) {
+    sonuc = sonuc.filter((b) => hedefDurumlar.includes(b.odeme_durumu));
   }
   if (filtre?.arama) {
     const q = filtre.arama.toLowerCase();
@@ -610,7 +628,7 @@ export async function belgeDosyaEkle(
   }
 }
 
-/** Dosya kaydını siler. */
+/** Dosya kaydını siler + B2'den fiziksel dosyayı da siler. */
 export async function belgeDosyaSil(
   dosyaId: string,
   belgeId: string
@@ -619,6 +637,26 @@ export async function belgeDosyaSil(
     const sirketId = await getSirketId();
     const supabase = await createClient();
 
+    // 1. Önce object key'i al (B2'den silmek için)
+    const { data: dosya } = await supabase
+      .from("belge_dosya")
+      .select("dosya_url")
+      .eq("id", dosyaId)
+      .eq("sirket_id", sirketId)
+      .maybeSingle();
+
+    // 2. B2'den fiziksel dosyayı sil
+    if (dosya?.dosya_url) {
+      try {
+        const { deleteFromB2 } = await import("@/lib/storage");
+        await deleteFromB2({ objectKey: dosya.dosya_url });
+      } catch {
+        // B2 silme başarısız olsa bile DB kaydını silmeye devam et
+        console.error("[belgeDosyaSil] B2 silme hatası, dosyaId:", dosyaId);
+      }
+    }
+
+    // 3. DB kaydını sil
     const { error } = await supabase
       .from("belge_dosya")
       .delete()

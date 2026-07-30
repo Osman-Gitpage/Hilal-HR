@@ -3,7 +3,7 @@ import { createClient } from "@/supabase/server";
 import { redirect } from "next/navigation";
 import { PersonelFormView } from "@/components/modules/personel/PersonelFormView";
 
-export const metadata: Metadata = { title: "Personel Düzenle — Hilal HR" };
+export const metadata: Metadata = { title: "Personel Düzenle — Hilal Office" };
 
 export default async function PersonelDuzenlePage({
   params,

@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "404 — Sayfa Bulunamadı | Hilal İK",
+  title: "404 — Sayfa Bulunamadı | Hilal Office",
   description: "Aradığınız sayfa bulunamadı.",
 };
 
@@ -30,7 +30,7 @@ export default function NotFound() {
           <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center">
             <span className="text-zinc-950 font-black text-base leading-none">H</span>
           </div>
-          <span className="text-white font-semibold tracking-tight text-lg">Hilal İK</span>
+          <span className="text-white font-semibold tracking-tight text-lg">Hilal Office</span>
         </Link>
 
         {/* 404 number */}

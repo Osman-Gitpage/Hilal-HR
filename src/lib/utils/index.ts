@@ -277,3 +277,43 @@ export function num(v: unknown): number {
   const n = Number(v);
   return isNaN(n) ? 0 : n;
 }
+
+/**
+ * Belirli bir hedef tarih itibarıyla geçerli olan net maaşı döndürür.
+ * Gelecek başlangıç tarihli zamlar hedef tarihten sonra yürürlüğe gireceğinden
+ * hedef tarihte geçerli olan dönemsel maaş hesabını baz alır.
+ */
+export function getValidMaasAtDate(
+  maasGecmisi?: Array<{ maas_net: number; gecerlilik_baslangic: string; gecerlilik_bitis: string | null }>,
+  targetDateStr?: string
+): number | null {
+  if (!maasGecmisi || maasGecmisi.length === 0) return null;
+
+  const targetDate = targetDateStr || new Date().toISOString().split("T")[0];
+
+  // Hedef tarihten önce veya hedef tarihte başlayan kayıtlar
+  const baslamisKayitlar = maasGecmisi.filter(
+    (m) => m.gecerlilik_baslangic && m.gecerlilik_baslangic <= targetDate
+  );
+
+  if (baslamisKayitlar.length > 0) {
+    // 1. Başlangıç tarihine göre BÜYÜKTEN KÜÇÜĞE (en yeni başlangıç en üstte) sırala
+    const sorted = [...baslamisKayitlar].sort((a, b) =>
+      b.gecerlilik_baslangic.localeCompare(a.gecerlilik_baslangic)
+    );
+
+    // 2. Sıralı listede hedef tarihte bitişi null olan veya bitiş tarihi hedef tarihten sonra/eşit olan ilk (en yeni) kaydı seç
+    const gecerli = sorted.find(
+      (m) => m.gecerlilik_bitis === null || m.gecerlilik_bitis >= targetDate
+    );
+    if (gecerli) return gecerli.maas_net;
+
+    return sorted[0].maas_net;
+  }
+
+  // Eğer hedef tarihten önce başlamış hiçbir kayıt yoksa (gelecek tarihli ilk kayıtsa), en erken başlayanı dön
+  const sortedAll = [...maasGecmisi].sort((a, b) =>
+    a.gecerlilik_baslangic.localeCompare(b.gecerlilik_baslangic)
+  );
+  return sortedAll[0]?.maas_net ?? null;
+}

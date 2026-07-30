@@ -10,12 +10,12 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DosyaGoruntule } from "@/components/ui/DosyaGoruntule";
 
 import { useBelgeDosyaEkle, useBelgeDosyaSil } from "@/hooks/useCari";
 import { formatBoyut } from "@/lib/cari";
+import { storageUpload, storageGetDownloadUrl } from "@/app/actions/storage";
 import type { BelgeDosya, DosyaTipi, DosyaKategori } from "@/types/cari";
 
 // ─── Yardımcılar ──────────────────────────────────────────────────────────────
@@ -26,30 +26,35 @@ function dosyaTipiTespit(file: File): DosyaTipi {
   return "Word";
 }
 
-function islemUrl(url: string): string | null {
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:"))
-    return url;
-  return null;
-}
-
 // ─── B2 Upload ────────────────────────────────────────────────────────────────
 
-async function uploadToB2(
+/**
+ * Dosyayı B2'ye yükler, object key döndürür.
+ * Hata durumunda fırlatır — blob: URL fallback yok.
+ */
+async function dosyayiB2YeYukle(
   file: File,
   sirketId: string,
   belgeId: string
-): Promise<{ url: string; adi: string; tipi: DosyaTipi; boyut: number }> {
+): Promise<{ objectKey: string; adi: string; tipi: DosyaTipi; boyut: number }> {
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("sirket_id", sirketId);
-  formData.append("belge_id", belgeId);
-  const res = await fetch("/api/cari/dosya-yukle", { method: "POST", body: formData });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ hata: "Upload hatası" }));
-    throw new Error(err.hata ?? "Dosya yüklenemedi");
-  }
-  const data = await res.json();
-  return { url: data.url, adi: data.adi, tipi: data.tipi, boyut: data.boyut };
+  formData.append("module", "cari");
+  formData.append("entityId", `belge-${belgeId}`);
+  formData.append("category", "dosya");
+
+  const result = await storageUpload(formData);
+  if (!result.success) throw new Error(result.error);
+
+  return { objectKey: result.data.objectKey, adi: file.name, tipi: dosyaTipiTespit(file), boyut: file.size };
+}
+
+// ─── Presigned URL Yardımcısı ─────────────────────────────────────────────────
+
+async function presignedUrlAl(objectKey: string): Promise<string | null> {
+  const res = await storageGetDownloadUrl({ objectKey });
+  if (res.success) return res.url;
+  return null;
 }
 
 // ─── Slot Bileşeni (dolu veya boş) ───────────────────────────────────────────
@@ -62,9 +67,10 @@ interface SlotProps {
   onYukle: (file: File) => void;
   onSil: () => void;
   onGoruntule: () => void;
+  onIndir: () => void;
 }
 
-function Slot({ kategori, dosya, yukleniyor, siliniyor, onYukle, onSil, onGoruntule }: SlotProps) {
+function Slot({ kategori, dosya, yukleniyor, siliniyor, onYukle, onSil, onGoruntule, onIndir }: SlotProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   const isBelge = kategori === "belge";
@@ -93,7 +99,6 @@ function Slot({ kategori, dosya, yukleniyor, siliniyor, onYukle, onSil, onGorunt
   }
 
   if (dosya) {
-    const url = islemUrl(dosya.dosya_url);
     const ext = dosya.dosya_adi.split(".").pop()?.toLowerCase() ?? "";
     const isPdf = ext === "pdf";
 
@@ -134,16 +139,14 @@ function Slot({ kategori, dosya, yukleniyor, siliniyor, onYukle, onSil, onGorunt
             <Eye className="h-3 w-3" />
             Görüntüle
           </Button>
-          {url && (
-            <a
-              href={url}
-              download={dosya.dosya_adi}
-              title="İndir"
-              className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:bg-white/60 dark:hover:bg-black/20 hover:text-foreground transition-colors"
-            >
-              <Download className="h-3 w-3" />
-            </a>
-          )}
+          <button
+            type="button"
+            title="İndir"
+            onClick={onIndir}
+            className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:bg-white/60 dark:hover:bg-black/20 hover:text-foreground transition-colors"
+          >
+            <Download className="h-3 w-3" />
+          </button>
           <Button
             variant="ghost"
             size="icon"
@@ -219,24 +222,17 @@ function CiftKarti({
     const setYukleniyor = kategori === "belge" ? setBelgeYukleniyor : setDekontYukleniyor;
     setYukleniyor(true);
     try {
-      let url: string, adi: string, boyut: number;
-      try {
-        const r = await uploadToB2(file, sirketId, belgeId);
-        url = r.url; adi = r.adi; boyut = r.boyut;
-      } catch {
-        url = URL.createObjectURL(file);
-        adi = file.name; boyut = file.size;
-      }
+      const r = await dosyayiB2YeYukle(file, sirketId, belgeId);
       const sonuc = await dosyaEkle({
         belge_id: belgeId,
-        dosya_url: url,
-        dosya_adi: adi,
-        dosya_tipi: dosyaTipiTespit(file),
-        boyut_byte: boyut,
+        dosya_url: r.objectKey,
+        dosya_adi: r.adi,
+        dosya_tipi: r.tipi,
+        boyut_byte: r.boyut,
         kategori,
         cift_no: ciftNo,
       });
-      if (sonuc.basarili) toast.success(`${adi} eklendi.`);
+      if (sonuc.basarili) toast.success(`${r.adi} eklendi.`);
       else toast.error(sonuc.hata);
     } catch (err) {
       toast.error(`Yüklenemedi: ${String(err)}`);
@@ -293,6 +289,13 @@ function CiftKarti({
           onYukle={(f) => handleYukle(f, "belge")}
           onSil={() => belgeDosya && handleSil(belgeDosya)}
           onGoruntule={() => belgeDosya && onGoruntule(belgeDosya)}
+          onIndir={async () => {
+            if (!belgeDosya) return;
+            const url = await presignedUrlAl(belgeDosya.dosya_url);
+            if (!url) { toast.error("İndirme bağlantısı alınamadı."); return; }
+            const a = document.createElement("a");
+            a.href = url; a.download = belgeDosya.dosya_adi; a.click();
+          }}
         />
         <Slot
           kategori="dekont"
@@ -302,6 +305,13 @@ function CiftKarti({
           onYukle={(f) => handleYukle(f, "dekont")}
           onSil={() => dekontDosya && handleSil(dekontDosya)}
           onGoruntule={() => dekontDosya && onGoruntule(dekontDosya)}
+          onIndir={async () => {
+            if (!dekontDosya) return;
+            const url = await presignedUrlAl(dekontDosya.dosya_url);
+            if (!url) { toast.error("İndirme bağlantısı alınamadı."); return; }
+            const a = document.createElement("a");
+            a.href = url; a.download = dekontDosya.dosya_adi; a.click();
+          }}
         />
       </div>
     </div>
@@ -315,10 +325,10 @@ interface DigerDosyaSatiriProps {
   onSil: () => void;
   siliniyor: boolean;
   onGoruntule: () => void;
+  onIndir: () => void;
 }
 
-function DigerDosyaSatiri({ dosya, onSil, siliniyor, onGoruntule }: DigerDosyaSatiriProps) {
-  const url = islemUrl(dosya.dosya_url);
+function DigerDosyaSatiri({ dosya, onSil, siliniyor, onGoruntule, onIndir }: DigerDosyaSatiriProps) {
   const ext = dosya.dosya_adi.split(".").pop()?.toLowerCase() ?? "";
   const isPdf = ext === "pdf";
   const isExcel = ["xlsx", "xls", "csv"].includes(ext);
@@ -346,15 +356,14 @@ function DigerDosyaSatiri({ dosya, onSil, siliniyor, onGoruntule }: DigerDosyaSa
         >
           <Eye className="h-3.5 w-3.5" />
         </Button>
-        {url && (
-          <a
-            href={url} target="_blank" rel="noopener noreferrer"
-            download={dosya.dosya_adi} title="İndir"
-            className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          >
-            <Download className="h-3.5 w-3.5" />
-          </a>
-        )}
+        <button
+          type="button"
+          title="İndir"
+          onClick={onIndir}
+          className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+        >
+          <Download className="h-3.5 w-3.5" />
+        </button>
         <Button
           variant="ghost" size="icon"
           className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
@@ -380,8 +389,22 @@ export function BelgeDosyaPanel({ belgeId, sirketId, dosyalar, yukleniyor }: Bel
   const { mutateAsync: dosyaEkle } = useBelgeDosyaEkle();
   const { mutateAsync: dosyaSil } = useBelgeDosyaSil();
 
-  // Görüntüleme state'i
+  // Görüntüleme state'i — objectKey + çözümlü presigned URL
   const [goruntulenenDosya, setGoruntulenenDosya] = React.useState<BelgeDosya | null>(null);
+  const [goruntulemeUrl, setGoruntulemeUrl] = React.useState<string | null>(null);
+
+  // Dosya görüntüleme: objectKey → presigned URL al
+  const handleGoruntule = React.useCallback(async (dosya: BelgeDosya) => {
+    setGoruntulenenDosya(dosya);
+    setGoruntulemeUrl(null);
+    const url = await presignedUrlAl(dosya.dosya_url);
+    if (url) {
+      setGoruntulemeUrl(url);
+    } else {
+      toast.error("Dosya görüntüleme bağlantısı alınamadı.");
+      setGoruntulenenDosya(null);
+    }
+  }, []);
 
   // Diğer dosyalar collapse
   const [digerAcik, setDigerAcik] = React.useState(true);
@@ -441,17 +464,13 @@ export function BelgeDosyaPanel({ belgeId, sirketId, dosyalar, yukleniyor }: Bel
       const key = `${file.name}-${file.size}`;
       setDigerYuklenenler((p) => new Set(p).add(key));
       try {
-        let url: string, adi: string, boyut: number;
-        try {
-          const r = await uploadToB2(file, sirketId, belgeId);
-          url = r.url; adi = r.adi; boyut = r.boyut;
-        } catch {
-          url = URL.createObjectURL(file);
-          adi = file.name; boyut = file.size;
-        }
+        const r = await dosyayiB2YeYukle(file, sirketId, belgeId);
         const sonuc = await dosyaEkle({
-          belge_id: belgeId, dosya_url: url, dosya_adi: adi,
-          dosya_tipi: dosyaTipiTespit(file), boyut_byte: boyut,
+          belge_id: belgeId,
+          dosya_url: r.objectKey,
+          dosya_adi: r.adi,
+          dosya_tipi: r.tipi,
+          boyut_byte: r.boyut,
           kategori: "diger",
         });
         if (sonuc.basarili) toast.success(`${file.name} eklendi.`);
@@ -535,7 +554,7 @@ export function BelgeDosyaPanel({ belgeId, sirketId, dosyalar, yukleniyor }: Bel
                 dekontDosya={getCiftDosyasi(ciftNo, "dekont")}
                 belgeId={belgeId}
                 sirketId={sirketId}
-                onGoruntule={setGoruntulenenDosya}
+                onGoruntule={handleGoruntule}
                 onCiftSil={() => setBosIDs((p) => p.filter((id) => id !== ciftNo))}
               />
             ))}
@@ -581,7 +600,13 @@ export function BelgeDosyaPanel({ belgeId, sirketId, dosyalar, yukleniyor }: Bel
                     dosya={d}
                     onSil={() => handleDigerSil(d)}
                     siliniyor={digerSilinenler.has(d.id)}
-                    onGoruntule={() => setGoruntulenenDosya(d)}
+                    onGoruntule={() => handleGoruntule(d)}
+                    onIndir={async () => {
+                      const url = await presignedUrlAl(d.dosya_url);
+                      if (!url) { toast.error("İndirme bağlantısı alınamadı."); return; }
+                      const a = document.createElement("a");
+                      a.href = url; a.download = d.dosya_adi; a.click();
+                    }}
                   />
                 ))}
               </div>
@@ -631,11 +656,11 @@ export function BelgeDosyaPanel({ belgeId, sirketId, dosyalar, yukleniyor }: Bel
         )}
       </div>
 
-      {/* Görüntüleme Dialog */}
+      {/* Görüntüleme Dialog — presigned URL ile */}
       <DosyaGoruntule
-        url={goruntulenenDosya ? (islemUrl(goruntulenenDosya.dosya_url) ?? null) : null}
+        url={goruntulemeUrl}
         dosyaAdi={goruntulenenDosya?.dosya_adi ?? ""}
-        onKapat={() => setGoruntulenenDosya(null)}
+        onKapat={() => { setGoruntulenenDosya(null); setGoruntulemeUrl(null); }}
       />
     </div>
   );

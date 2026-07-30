@@ -119,6 +119,7 @@ export function TopluOdemeModal({ belgeler, acik, onKapat }: TopluOdemeModalProp
                 <SelectContent>
                   <SelectItem value="banka">Banka</SelectItem>
                   <SelectItem value="elden">Elden</SelectItem>
+                  <SelectItem value="cek">Çek</SelectItem>
                 </SelectContent>
               </Select>
             </div>

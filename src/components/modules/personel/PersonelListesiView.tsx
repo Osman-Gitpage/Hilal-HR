@@ -23,7 +23,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUIStore } from "@/stores/uiStore";
-import { usePersonelList, usePersonelKpi, type PersonelListeItem } from "@/hooks/usePersonelList";
+import { usePersonelList, usePersonelKpi, getAktifMaas, type PersonelListeItem } from "@/hooks/usePersonelList";
 import { useSirketStore } from "@/stores/sirketStore";
 import { personelCikisYap } from "@/app/actions/personel";
 import { QUERY_KEYS } from "@/lib/constants";
@@ -74,7 +74,7 @@ function istenCikisTarihi(p: PersonelListeItem): string | null {
   );
 }
 function aktifMaas(p: PersonelListeItem): number | null {
-  return p.maas_gecmisi.find((m) => m.gecerlilik_bitis === null)?.maas_net ?? null;
+  return getAktifMaas(p.maas_gecmisi);
 }
 
 // ─────────────────────────────────────────────
@@ -212,6 +212,10 @@ export function PersonelListesiView() {
           <p className="text-muted-foreground mt-1">Tüm çalışanları görüntüleyin ve yönetin.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button id="btn-maas-zamlar" variant="outline" onClick={() => router.push("/personel/zam")}>
+            <TrendingUp className="h-4 w-4 mr-2 text-emerald-600 dark:text-emerald-400" />
+            Maaş Zamları
+          </Button>
           <Button id="btn-hizli-ekle" variant="outline" onClick={() => setPersonelEkleAcik(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Hızlı Ekle

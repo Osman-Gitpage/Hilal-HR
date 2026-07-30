@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   Users,
@@ -22,7 +23,7 @@ interface NavItem {
   etiket: string;
   ikon: React.ForwardRefExoticComponent<
     Omit<import("lucide-react").LucideProps, "ref"> &
-      React.RefAttributes<SVGSVGElement>
+    React.RefAttributes<SVGSVGElement>
   >;
   id: string;
   yakinsa?: boolean;
@@ -122,39 +123,44 @@ export function AppSidebar() {
     const acik = mobile ? true : sidebarAcik;
 
     return (
-      <div className="flex flex-col h-full bg-white dark:bg-zinc-950">
-
+      <div className="flex flex-col h-full bg-white dark:bg-zinc-950 overflow-hidden">
         {/* ── Logo / Marka Başlığı ── */}
-        <div
+        <Link
+          href="/dashboard"
           className={cn(
-            "flex items-center h-16 shrink-0 border-b border-zinc-100 dark:border-zinc-900",
-            acik ? "px-5 gap-3" : "justify-center px-0"
+            "flex items-center h-16 shrink-0 border-b border-zinc-100 dark:border-zinc-900 group transition-opacity hover:opacity-90 overflow-hidden",
+            acik ? "px-4 gap-3" : "justify-center px-0"
           )}
         >
-          <div className="h-9 w-9 bg-zinc-900 dark:bg-white rounded-xl flex items-center justify-center font-black text-sm text-white dark:text-zinc-950 shrink-0 shadow-sm">
-            H
-          </div>
+          <Image
+            src="/test/fav.png"
+            alt="Hilal Office Logo"
+            width={32}
+            height={32}
+            className="h-8 w-8 object-contain shrink-0"
+            priority
+          />
           {acik && (
-            <div className="flex flex-col min-w-0">
-              <span className="font-bold text-zinc-900 dark:text-white text-sm leading-tight tracking-tight">
-                Hilal İK
+            <div className="flex flex-col min-w-0 truncate">
+              <span className="font-bold text-zinc-900 dark:text-white text-sm leading-tight tracking-tight truncate">
+                Hilal Office
               </span>
-              <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium mt-0.5 tracking-wide">
+              <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium mt-0.5 tracking-wide truncate">
                 Bordro & Muhasebe
               </span>
             </div>
           )}
-        </div>
+        </Link>
 
         {/* ── Navigasyon ── */}
         <nav className="flex-1 overflow-y-auto py-4">
           {acik ? (
             /* Geniş mod: gruplu bölümler */
-            <div className="space-y-5 px-4">
+            <div className="space-y-5 px-3">
               {NAV_GROUPS.map((grup) => (
                 <div key={grup.baslik}>
                   {/* Bölüm başlığı */}
-                  <p className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-1.5 px-2">
+                  <p className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-1.5 px-2 truncate">
                     {grup.baslik}
                   </p>
 
@@ -173,7 +179,7 @@ export function AppSidebar() {
                           href={item.yakinsa ? "#" : item.href}
                           onClick={handleNavClick}
                           className={cn(
-                            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150",
                             aktif
                               ? "bg-zinc-100 dark:bg-zinc-800/80 text-zinc-900 dark:text-white"
                               : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 hover:text-zinc-800 dark:hover:text-zinc-200",
@@ -204,7 +210,7 @@ export function AppSidebar() {
             </div>
           ) : (
             /* Dar mod: sadece ikonlar + tooltip */
-            <div className="flex flex-col items-center gap-1 px-2">
+            <div className="flex flex-col items-center gap-1 px-1">
               {NAV_ITEMS_FLAT.map((item) => {
                 const aktif =
                   pathname === item.href ||
@@ -214,24 +220,25 @@ export function AppSidebar() {
                 return (
                   <Tooltip key={item.id}>
                     <TooltipTrigger
-                      className={cn(
-                        "flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-150",
-                        aktif
-                          ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white"
-                          : "text-zinc-400 dark:text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 hover:text-zinc-700 dark:hover:text-zinc-300",
-                        item.yakinsa && "opacity-40 cursor-not-allowed pointer-events-none"
+                      render={(props) => (
+                        <Link
+                          {...props}
+                          id={item.id}
+                          href={item.yakinsa ? "#" : item.href}
+                          onClick={handleNavClick}
+                          className={cn(
+                            "flex items-center justify-center w-10 h-10 rounded-lg transition-colors duration-150",
+                            aktif
+                              ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                              : "text-zinc-400 dark:text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 hover:text-zinc-700 dark:hover:text-zinc-300",
+                            item.yakinsa && "opacity-40 cursor-not-allowed pointer-events-none"
+                          )}
+                          aria-current={aktif ? "page" : undefined}
+                        >
+                          <Ikon className="h-4.5 w-4.5 shrink-0" />
+                        </Link>
                       )}
-                    >
-                      <Link
-                        id={item.id}
-                        href={item.yakinsa ? "#" : item.href}
-                        onClick={handleNavClick}
-                        className="flex items-center justify-center w-full h-full"
-                        aria-current={aktif ? "page" : undefined}
-                      >
-                        <Ikon className="h-4.5 w-4.5 shrink-0" />
-                      </Link>
-                    </TooltipTrigger>
+                    />
                     <TooltipContent side="right" className="text-xs">
                       {item.etiket}
                       {item.yakinsa && " (Yakında)"}
@@ -251,7 +258,7 @@ export function AppSidebar() {
               size="icon"
               onClick={toggleSidebar}
               className={cn(
-                "w-full h-8 text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900/60 transition-all duration-150",
+                "w-full h-8 text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900/60 transition-colors duration-150",
               )}
               id="btn-sidebar-toggle"
               aria-label={sidebarAcik ? "Sidebar'ı kapat" : "Sidebar'ı aç"}
@@ -273,21 +280,23 @@ export function AppSidebar() {
       {/* ── DESKTOP Sidebar ── */}
       <aside
         className={cn(
-          "hidden sm:flex flex-col h-full border-r border-zinc-100 dark:border-zinc-900 transition-all duration-300 ease-in-out shrink-0",
-          sidebarAcik ? "w-56" : "w-[60px]"
+          "hidden sm:flex flex-col h-full border-r border-zinc-100 dark:border-zinc-900 transition-all duration-200 ease-in-out shrink-0",
+          sidebarAcik ? "w-56" : "w-16"
         )}
       >
         <SidebarIcerik />
       </aside>
 
       {/* ── MOBİL Backdrop ── */}
-      {mobileSidebarAcik && (
-        <div
-          className="fixed inset-0 z-40 bg-black/30 dark:bg-black/50 sm:hidden backdrop-blur-sm"
-          onClick={() => setMobileSidebarAcik(false)}
-          aria-hidden="true"
-        />
-      )}
+      {
+        mobileSidebarAcik && (
+          <div
+            className="fixed inset-0 z-40 bg-black/30 dark:bg-black/50 sm:hidden backdrop-blur-sm"
+            onClick={() => setMobileSidebarAcik(false)}
+            aria-hidden="true"
+          />
+        )
+      }
 
       {/* ── MOBİL Drawer ── */}
       <aside

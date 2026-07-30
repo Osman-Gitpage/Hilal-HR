@@ -9,7 +9,7 @@ export type BelgeTur = "fatura" | "proforma" | "hesap_bilgisi";
 
 export type OdemeDurumu = "odendi" | "kismi" | "odenmedi";
 
-export type OdemeYontem = "banka" | "elden";
+export type OdemeYontem = "banka" | "elden" | "cek";
 
 export type DosyaTipi = "PDF" | "Word";
 
@@ -81,6 +81,7 @@ export interface BelgeListItem extends Belge {
   odeme_durumu: OdemeDurumu;
   /** tarih + 30 gün geçmiş AND durum != odendi */
   gecikmiş: boolean;
+  odemeler?: Odeme[];
 }
 
 /** Belge detay sayfasında kullanılan tam veri */
@@ -164,7 +165,8 @@ export interface DosyaPayload {
 
 export interface BelgeListFiltre {
   tur?: BelgeTur;
-  durum?: OdemeDurumu;
+  durum?: OdemeDurumu;       // Tekil (geriye uyumlu)
+  durumlar?: OdemeDurumu[];  // Çoklu durum filtresi
   arama?: string;
   firma_id?: string;
   yil?: number;  // Fatura tarihi yıl filtresi (01.01.YYYY – 31.12.YYYY)

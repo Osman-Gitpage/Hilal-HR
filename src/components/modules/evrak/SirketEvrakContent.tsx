@@ -4,14 +4,14 @@
 // Şirket geneli evraklar (Vergi Levhası, İmza Sirküleri, Kaşe vb.)
 // Kaşe/İmza özel işleme: şeffaf PNG görseli, önizleme
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   useEvrakKategorileri,
   useSirketEvraklar,
   useEvrakMutations,
 } from "@/hooks/useEvrak";
-import { downloadUrlOlustur } from "@/app/actions/upload";
+import { storageGetDownloadUrl } from "@/app/actions/storage";
 import { gecerlilikDurumuHesapla, durumRengi, sureEtiketi } from "@/lib/utils/evrak-utils";
 import type { EvrakKategori } from "@/types/evrak";
 
@@ -82,8 +82,8 @@ export function SirketEvrakContent() {
   }, [evraklar]);
 
   const handleOnizle = async (objectKey: string, dosyaAdi: string) => {
-    const result = await downloadUrlOlustur({ objectKey });
-    if ("url" in result) {
+    const result = await storageGetDownloadUrl({ objectKey });
+    if (result.success) {
       setOnizlemeUrl(result.url);
       setOnizlemeDosyaAdi(dosyaAdi);
     } else {
@@ -92,8 +92,8 @@ export function SirketEvrakContent() {
   };
 
   const handleIndir = async (objectKey: string, dosyaAdi: string) => {
-    const result = await downloadUrlOlustur({ objectKey });
-    if ("url" in result) {
+    const result = await storageGetDownloadUrl({ objectKey });
+    if (result.success) {
       const a = document.createElement("a");
       a.href = result.url;
       a.download = dosyaAdi;
@@ -242,16 +242,20 @@ function SirketEvrakKart({
   // Kaşe/İmza ise ve resim yüklenmişse görsel önizleme yükle
   const enSonResimMi = enSonEvrak && isResimDosya(enSonEvrak.dosya_adi);
 
-  const handleGorselYukle = async () => {
-    if (!enSonEvrak || gorselUrl) return;
-    const result = await downloadUrlOlustur({ objectKey: enSonEvrak.dosya_url });
-    if ("url" in result) setGorselUrl(result.url);
-  };
-
-  // Görsel yükleme tetikle
-  if (isKaseImza && enSonResimMi && !gorselUrl) {
-    handleGorselYukle();
-  }
+  // Görsel yüklemeyi useEffect ile tetikle
+  useEffect(() => {
+    let active = true;
+    if (isKaseImza && enSonResimMi && !gorselUrl && enSonEvrak?.dosya_url) {
+      storageGetDownloadUrl({ objectKey: enSonEvrak.dosya_url }).then((result) => {
+        if (active && result.success) {
+          setGorselUrl(result.url);
+        }
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, [isKaseImza, enSonResimMi, gorselUrl, enSonEvrak?.dosya_url]);
 
   // İkon seçimi
   const kartIcon = isKaseImza

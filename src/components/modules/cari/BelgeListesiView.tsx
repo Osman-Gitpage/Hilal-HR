@@ -578,10 +578,23 @@ export function BelgeListesiView() {
     if (t === "fatura" || t === "proforma" || t === "hesap_bilgisi") return t;
     return "tumu";
   });
-  const [durum, setDurum] = React.useState<OdemeDurumu | "tumu">(() => {
-    const d = searchParams.get("durum");
-    if (d === "odendi" || d === "kismi" || d === "odenmedi") return d;
-    return "tumu";
+  // Çoklu durum filtresi — %2C ve virgül ayrıştırma güvencesi
+  const parseDurumParam = (dParam: string | null): Set<OdemeDurumu> => {
+    const durumSet = new Set<OdemeDurumu>();
+    if (dParam) {
+      const decoded = decodeURIComponent(dParam).replace(/%2C/gi, ",");
+      decoded.split(",").forEach((item) => {
+        const clean = item.trim().toLowerCase();
+        if (clean === "odendi" || clean === "kismi" || clean === "odenmedi") {
+          durumSet.add(clean as OdemeDurumu);
+        }
+      });
+    }
+    return durumSet;
+  };
+
+  const [seciliDurumlar, setSeciliDurumlar] = React.useState<Set<OdemeDurumu>>(() => {
+    return parseDurumParam(searchParams.get("durum"));
   });
   const [firmaId, setFirmaId] = React.useState<string>(() => {
     const p = searchParams.get("firmaId");
@@ -609,19 +622,19 @@ export function BelgeListesiView() {
   }, [arama]);
 
   // Filtre/arama/yıl değişince sayfayı sıfırla
-  React.useEffect(() => { setSayfa(1); }, [aramaDebounce, durum, firmaId, yil]);
+  React.useEffect(() => { setSayfa(1); }, [aramaDebounce, seciliDurumlar, firmaId, yil]);
 
   React.useEffect(() => {
     const params = new URLSearchParams();
     if (aramaDebounce) params.set("arama", aramaDebounce);
     if (tur !== "tumu") params.set("tur", tur);
-    if (durum !== "tumu") params.set("durum", durum);
+    if (seciliDurumlar.size > 0) params.set("durum", [...seciliDurumlar].join(","));
     if (firmaId !== "tumu") params.set("firmaId", firmaId);
     if (yil !== mevcutYil) params.set("yil", String(yil));
     const queryString = params.toString();
     const newUrl = queryString ? `?${queryString}` : window.location.pathname;
     window.history.replaceState(null, "", newUrl);
-  }, [aramaDebounce, tur, durum, firmaId, yil, mevcutYil]);
+  }, [aramaDebounce, tur, seciliDurumlar, firmaId, yil, mevcutYil]);
 
   const [seciliIds, setSeciliIds] = React.useState<Set<string>>(new Set());
   const [topluOdemeAcik, setTopluOdemeAcik] = React.useState(false);
@@ -656,9 +669,21 @@ export function BelgeListesiView() {
     setExportYukleniyor("pdf");
     setExportMenuAcik(false);
     try {
+      // Aktif filtreleri PDF'e yaz
+      const durumEtiketleri: Record<OdemeDurumu, string> = {
+        odendi: "Ödendi", kismi: "Kısmi", odenmedi: "Ödenmedi",
+      };
+      const aktifFiltreler = [
+        ...[...seciliDurumlar].map((d) => durumEtiketleri[d]),
+        ...(tur !== "tumu" ? [tur === "fatura" ? "Resmi Fatura" : tur === "proforma" ? "Proforma" : "Hesap Bilgisi"] : []),
+      ].join(", ") || undefined;
+
+      const seciliFirmaObj = firmalar.find((f) => f.id === firmaId);
       await cariListePdf(siraliiBelgeler, {
-        baslik: "Cari Belge Listesi",
+        baslik: seciliFirmaObj ? `${seciliFirmaObj.ad} — Cari Hesap Ekstresi` : "Cari Belge ve Hesap Ekstresi",
         donem: `${yil} Yılı`,
+        firmaAdi: seciliFirmaObj?.ad,
+        aktifFiltreler,
       });
     } finally {
       setExportYukleniyor(null);
@@ -676,13 +701,13 @@ export function BelgeListesiView() {
 
   const filtre: BelgeListFiltre = {
     tur: tur !== "tumu" ? tur : undefined,
-    durum: durum !== "tumu" ? durum : undefined,
+    durumlar: seciliDurumlar.size > 0 ? [...seciliDurumlar] : undefined,
     arama: aramaDebounce || undefined,
     firma_id: firmaId !== "tumu" ? firmaId : undefined,
     yil,
   };
 
-  const herhangiBirFiltre = !!(arama || tur !== "tumu" || durum !== "tumu" || firmaId !== "tumu");
+  const herhangiBirFiltre = !!(arama || tur !== "tumu" || seciliDurumlar.size > 0 || firmaId !== "tumu");
 
   const { data: belgeler = [], isLoading: belgeYukleniyor } = useBelgeList(filtre);
   const { data: kpiData = [], isLoading: kpiYukleniyor } = useCariKpi(yil);
@@ -764,7 +789,7 @@ export function BelgeListesiView() {
   }, [belgeler]);
 
   // Aktif filtre sayısı (tür hariç — tür artık kart seçici aracılığıyla yönetiliyor)
-  const aktifFiltreSayisi = [durum !== "tumu", firmaId !== "tumu"].filter(Boolean).length;
+  const aktifFiltreSayisi = [seciliDurumlar.size > 0, firmaId !== "tumu"].filter(Boolean).length;
 
   return (
     <TooltipProvider>
@@ -1002,47 +1027,82 @@ export function BelgeListesiView() {
 
           {/* Filtre Paneli */}
           {filtrePanelAcik && (
-            <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-muted/20 border border-border/40 animate-in fade-in slide-in-from-top-1 duration-200">
-              <Select value={firmaId} onValueChange={(v) => setFirmaId(v ?? "tumu")}>
-                <SelectTrigger className="h-8 text-xs w-[160px] bg-background">
-                  <SelectValue placeholder="Firma" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="tumu">Tüm Firmalar</SelectItem>
-                  <SelectItem value="__yok">Firma Yok</SelectItem>
-                  {firmalar.map((f) => (
-                    <SelectItem key={f.id} value={f.id}>{f.ad}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={durum} onValueChange={(v) => setDurum(v as OdemeDurumu | "tumu")}>
-                <SelectTrigger className="h-8 text-xs w-[145px] bg-background">
-                  <SelectValue placeholder="Ödeme Durumu" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="tumu">Tüm Durumlar</SelectItem>
-                  <SelectItem value="odenmedi">Ödenmedi</SelectItem>
-                  <SelectItem value="kismi">Kısmi Ödendi</SelectItem>
-                  <SelectItem value="odendi">Ödendi</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {aktifFiltreSayisi > 0 && (
-                <button
-                  onClick={() => { setDurum("tumu"); setFirmaId("tumu"); }}
-                  className="h-8 px-3 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-lg hover:bg-muted transition-colors"
-                >
-                  <X className="h-3 w-3" /> Temizle
-                </button>
-              )}
-
-              {/* Sonuç sayısı */}
-              {!belgeYukleniyor && (
-                <span className="ml-auto text-xs text-muted-foreground font-medium">
-                  {belgeler.length} belge
+            <div className="flex flex-col gap-3 p-3.5 rounded-xl bg-muted/20 border border-border/40 animate-in fade-in slide-in-from-top-1 duration-200">
+              {/* Ödeme Durumu — Çoklu Seçim Chip'leri */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider w-full">
+                  Ödeme Durumu
                 </span>
-              )}
+                {([
+                  { deger: "odenmedi" as OdemeDurumu, etiket: "Ödenmedi", renkAktif: "bg-slate-700 text-white border-slate-700", renkPasif: "border-slate-200 text-slate-600 hover:border-slate-400 dark:border-slate-700 dark:text-slate-400" },
+                  { deger: "kismi"    as OdemeDurumu, etiket: "Kısmi",    renkAktif: "bg-amber-500 text-white border-amber-500", renkPasif: "border-amber-200 text-amber-700 hover:border-amber-400 dark:border-amber-800 dark:text-amber-400" },
+                  { deger: "odendi"   as OdemeDurumu, etiket: "Ödendi",   renkAktif: "bg-emerald-600 text-white border-emerald-600", renkPasif: "border-emerald-200 text-emerald-700 hover:border-emerald-400 dark:border-emerald-800 dark:text-emerald-400" },
+                ] as const).map(({ deger, etiket, renkAktif, renkPasif }) => {
+                  const aktif = seciliDurumlar.has(deger);
+                  return (
+                    <button
+                      key={deger}
+                      onClick={() => {
+                        setSeciliDurumlar((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(deger)) next.delete(deger);
+                          else next.add(deger);
+                          return next;
+                        });
+                        setSayfa(1);
+                      }}
+                      className={`flex items-center gap-1.5 h-7 px-3 rounded-full border text-xs font-semibold transition-all duration-150
+                        ${aktif ? renkAktif + " shadow-sm" : "bg-background " + renkPasif}
+                      `}
+                    >
+                      {aktif && <CheckSquare className="h-3 w-3" />}
+                      {etiket}
+                    </button>
+                  );
+                })}
+                {seciliDurumlar.size > 0 && (
+                  <button
+                    onClick={() => { setSeciliDurumlar(new Set()); setSayfa(1); }}
+                    className="h-7 px-2 text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-full hover:bg-muted transition-colors"
+                  >
+                    <X className="h-2.5 w-2.5" /> Sıfırla
+                  </button>
+                )}
+              </div>
+
+              {/* Firma Seçici */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider w-full">
+                  Firma
+                </span>
+                <Select value={firmaId} onValueChange={(v) => { setFirmaId(v ?? "tumu"); setSayfa(1); }}>
+                  <SelectTrigger className="h-8 text-xs w-[200px] bg-background">
+                    <SelectValue placeholder="Tüm Firmalar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tumu">Tüm Firmalar</SelectItem>
+                    <SelectItem value="__yok">Firma Yok</SelectItem>
+                    {firmalar.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>{f.ad}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {aktifFiltreSayisi > 0 && (
+                  <button
+                    onClick={() => { setSeciliDurumlar(new Set()); setFirmaId("tumu"); setSayfa(1); }}
+                    className="h-8 px-3 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-lg hover:bg-muted transition-colors"
+                  >
+                    <X className="h-3 w-3" /> Tüm Filtreleri Temizle
+                  </button>
+                )}
+
+                {!belgeYukleniyor && (
+                  <span className="ml-auto text-xs text-muted-foreground font-medium">
+                    {belgeler.length} belge
+                  </span>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -1074,7 +1134,7 @@ export function BelgeListesiView() {
             )}
             {herhangiBirFiltre && (
               <button
-                onClick={() => { setArama(""); setTur("tumu"); setDurum("tumu"); setFirmaId("tumu"); }}
+                onClick={() => { setArama(""); setTur("tumu"); setSeciliDurumlar(new Set()); setFirmaId("tumu"); }}
                 className="mt-4 text-sm text-primary hover:underline flex items-center gap-1"
               >
                 <X className="h-3.5 w-3.5" /> Filtreleri temizle

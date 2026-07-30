@@ -4,7 +4,7 @@
 // react-pdf ile PDF'in ilk sayfasını küçük resim olarak render eder
 
 import { useState, useEffect, useCallback } from "react";
-import { downloadUrlOlustur } from "@/app/actions/upload";
+import { storageGetDownloadUrl } from "@/app/actions/storage";
 import { FileText } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -41,8 +41,8 @@ export function PdfThumbnail({
     let cancelled = false;
     (async () => {
       try {
-        const result = await downloadUrlOlustur({ objectKey });
-        if (!cancelled && "url" in result) {
+        const result = await storageGetDownloadUrl({ objectKey });
+        if (!cancelled && result.success) {
           setPdfUrl(result.url);
         } else {
           setHata(true);

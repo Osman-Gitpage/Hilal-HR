@@ -202,16 +202,16 @@ export async function personelGuncelle(
 
   const yeniMaasNet = Number(formData.get("maas_net"));
 
-  // Mevcut aktif maaş
-  const maasRes = await supabase
+  // En güncel maaş kaydını bul
+  const { data: maasRows } = await supabase
     .from("maas_gecmisi")
     .select("id, maas_net")
     .eq("personel_id", personelId)
     .eq("sirket_id", sirketId)
-    .is("gecerlilik_bitis", null)
-    .single();
+    .order("gecerlilik_baslangic", { ascending: false })
+    .limit(1);
 
-  const mevcutMaas = maasRes.data as any;
+  const mevcutMaas = maasRows?.[0] ?? null;
 
   const tc = (formData.get("tc") as string)?.trim();
   const tcHata = tcKimlikDogrula(tc);
@@ -243,15 +243,19 @@ export async function personelGuncelle(
 
   if (updateRes.error) return { hata: updateRes.error.message };
 
-  // Maaş değiştiyse yeni kayıt
-  if (mevcutMaas && mevcutMaas.maas_net !== yeniMaasNet) {
+  // Maaş girildiyse veya değiştiyse yeni kayıt
+  if (yeniMaasNet > 0 && (!mevcutMaas || mevcutMaas.maas_net !== yeniMaasNet)) {
     const bugun = new Date().toISOString().split("T")[0];
 
+    // Önceki tüm açık maaş kayıtlarını kapat
     await supabase
       .from("maas_gecmisi")
       .update({ gecerlilik_bitis: bugun })
-      .eq("id", mevcutMaas.id);
+      .eq("personel_id", personelId)
+      .eq("sirket_id", sirketId)
+      .is("gecerlilik_bitis", null);
 
+    // Yeni maaş kaydı oluştur
     await supabase.from("maas_gecmisi").insert({
       personel_id: personelId,
       sirket_id: sirketId,
@@ -400,5 +404,97 @@ export async function personelYenidenIseAl(
 
   revalidatePath("/personel");
   revalidatePath(`/personel/${personelId}`);
+  return { basarili: true };
+}
+
+// ─────────────────────────────────────────────
+// Maaş Zammı Yap (Tekli)
+// ─────────────────────────────────────────────
+export async function maasZammiYap(
+  personelId: string,
+  yeniMaasNet: number,
+  gecerlilikBaslangic?: string
+) {
+  const { supabase, sirketId } = await getAuthContext();
+
+  if (!yeniMaasNet || yeniMaasNet <= 0) {
+    return { hata: "Lütfen geçerli bir yeni maaş tutarı girin." };
+  }
+
+  const baslangicTarihi =
+    gecerlilikBaslangic || new Date().toISOString().split("T")[0];
+
+  const eskiBitisDate = new Date(baslangicTarihi);
+  eskiBitisDate.setDate(eskiBitisDate.getDate() - 1);
+  const eskiBitisStr = eskiBitisDate.toISOString().split("T")[0];
+
+  // Eski tüm açık maaş kayıtlarını yeni zam tarihinden 1 gün önceki tarihle kapat
+  await supabase
+    .from("maas_gecmisi")
+    .update({ gecerlilik_bitis: eskiBitisStr })
+    .eq("personel_id", personelId)
+    .eq("sirket_id", sirketId)
+    .is("gecerlilik_bitis", null);
+
+  // Yeni maaş kaydı oluştur
+  const { error: insErr } = await supabase.from("maas_gecmisi").insert({
+    personel_id: personelId,
+    sirket_id: sirketId,
+    maas_net: yeniMaasNet,
+    gecerlilik_baslangic: baslangicTarihi,
+    gecerlilik_bitis: null,
+  } as any);
+
+  if (insErr) return { hata: insErr.message };
+
+  revalidatePath("/personel");
+  revalidatePath("/bordro");
+  revalidatePath(`/personel/${personelId}`);
+  return { basarili: true };
+}
+
+// ─────────────────────────────────────────────
+// Toplu Maaş Zammı Yap
+// ─────────────────────────────────────────────
+export async function topluMaasZammiYap(
+  zamlar: Array<{ personelId: string; yeniMaasNet: number }>,
+  gecerlilikBaslangic?: string
+) {
+  const { supabase, sirketId } = await getAuthContext();
+
+  if (!zamlar || zamlar.length === 0) {
+    return { hata: "Zam yapılacak personel seçilmedi." };
+  }
+
+  const baslangicTarihi =
+    gecerlilikBaslangic || new Date().toISOString().split("T")[0];
+
+  const eskiBitisDate = new Date(baslangicTarihi);
+  eskiBitisDate.setDate(eskiBitisDate.getDate() - 1);
+  const eskiBitisStr = eskiBitisDate.toISOString().split("T")[0];
+
+  for (const item of zamlar) {
+    if (item.yeniMaasNet <= 0) continue;
+
+    // Önceki tüm açık maaş kayıtlarını kapat
+    await supabase
+      .from("maas_gecmisi")
+      .update({ gecerlilik_bitis: eskiBitisStr })
+      .eq("personel_id", item.personelId)
+      .eq("sirket_id", sirketId)
+      .is("gecerlilik_bitis", null);
+
+    // Yeni maaş ekle
+    await supabase.from("maas_gecmisi").insert({
+      personel_id: item.personelId,
+      sirket_id: sirketId,
+      maas_net: item.yeniMaasNet,
+      gecerlilik_baslangic: baslangicTarihi,
+      gecerlilik_bitis: null,
+    } as any);
+  }
+
+  revalidatePath("/personel");
+  revalidatePath("/bordro");
   return { basarili: true };
 }

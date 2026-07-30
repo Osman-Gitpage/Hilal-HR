@@ -1,7 +1,7 @@
 // ─── Cari Modülü — Saf Yardımcı Fonksiyonlar ────────────────────────────────
 // Hiçbir DB / I/O bağımlılığı yoktur; her yerden import edilebilir.
 
-import type { ParaBirimi, BelgeTur, OdemeDurumu, Odeme } from "@/types/cari";
+import type { ParaBirimi, BelgeTur, OdemeDurumu, Odeme, OdemeYontem } from "@/types/cari";
 
 // ── Para Birimi Formatla ─────────────────────────────────────────────────────
 
@@ -143,3 +143,34 @@ export function tarihFormat(tarih: string): string {
 export function bugunYYYYMMDD(): string {
   return new Date().toISOString().split("T")[0];
 }
+
+// ── Ödeme Yöntemi Yardımcıları ────────────────────────────────────────────────
+
+/** Ödeme yönteminin Türkçe etiketini döndürür. */
+export function odemeYontemEtiket(yontem: OdemeYontem): string {
+  switch (yontem) {
+    case "banka":
+      return "Banka";
+    case "elden":
+      return "Elden";
+    case "cek":
+      return "Çek";
+    default:
+      return yontem;
+  }
+}
+
+/** Ödeme yönteminin UI rozet (badge) CSS sınıflarını döndürür. */
+export function odemeYontemBadgeClass(yontem: OdemeYontem): string {
+  switch (yontem) {
+    case "banka":
+      return "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400";
+    case "elden":
+      return "bg-slate-100 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400";
+    case "cek":
+      return "bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400";
+    default:
+      return "bg-slate-100 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400";
+  }
+}
+

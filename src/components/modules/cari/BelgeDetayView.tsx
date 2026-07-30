@@ -8,7 +8,7 @@ import {
   Building2, Calendar, Ship, Banknote,
   CreditCard, CheckCircle2, Clock, Loader2,
   Save, Plus, Paperclip, StickyNote,
-  MoreHorizontal,
+  MoreHorizontal, FileText,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -39,10 +39,11 @@ import {
   useOdemeSil,
   useBelgeNotlarGuncelle,
 } from "@/hooks/useCari";
-import { paraFormat, tarihFormat } from "@/lib/cari";
+import { paraFormat, tarihFormat, odemeYontemEtiket, odemeYontemBadgeClass } from "@/lib/cari";
 import type { BelgeTur, OdemeDurumu, Odeme } from "@/types/cari";
 import { OdemeEkleModal } from "./OdemeEkleModal";
 import { BelgeDosyaPanel } from "./BelgeDosyaPanel";
+import { belgeDetayPdf } from "@/lib/pdf/cariPdf";
 
 // ─── Konfigürasyon ────────────────────────────────────────────────────────────
 
@@ -113,8 +114,6 @@ function OdemeItem({ odeme, belgeId, index }: { odeme: Odeme; belgeId: string; i
     setSilOnay(false);
   };
 
-  const isBanka = odeme.yontem === "banka";
-
   return (
     <>
       <div className="relative group px-4 py-3">
@@ -126,12 +125,8 @@ function OdemeItem({ odeme, belgeId, index }: { odeme: Odeme; belgeId: string; i
                 <span className="text-sm font-semibold text-foreground">
                   {tarihFormat(odeme.tarih)}
                 </span>
-                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold
-                  ${isBanka
-                    ? "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400"
-                    : "bg-slate-100 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400"
-                  }`}>
-                  {isBanka ? "Banka" : "Elden"}
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${odemeYontemBadgeClass(odeme.yontem)}`}>
+                  {odemeYontemEtiket(odeme.yontem)}
                 </span>
               </div>
               {odeme.aciklama && (
@@ -299,6 +294,24 @@ export function BelgeDetayView({ belgeId }: { belgeId: string }) {
 
         {/* Aksiyonlar */}
         <div className="flex items-center gap-2">
+          {belge && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  await belgeDetayPdf(belge);
+                  toast.success("PDF fişi başarıyla indirildi.");
+                } catch {
+                  toast.error("PDF oluşturulurken hata oluştu.");
+                }
+              }}
+              className="gap-1.5 h-8 text-xs"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              PDF Fişi İndir
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"

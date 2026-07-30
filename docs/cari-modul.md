@@ -43,7 +43,7 @@
 | tutar | * | |
 | para_birimi | * | |
 | kur | * | |
-| yontem | * | banka / elden |
+| yontem | * | banka / elden / cek |
 | aciklama | | |
 
 ### Hesaplamalar

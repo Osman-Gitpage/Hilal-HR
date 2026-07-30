@@ -9,8 +9,7 @@ import {
   usePersonelEvraklar,
   useEvrakMutations,
 } from "@/hooks/useEvrak";
-import { useFileUpload } from "@/hooks/useFileUpload";
-import { downloadUrlOlustur } from "@/app/actions/upload";
+import { storageGetDownloadUrl } from "@/app/actions/storage";
 import { gecerlilikDurumuHesapla, durumRengi, kalanGunEtiketi, sureEtiketi } from "@/lib/utils/evrak-utils";
 import type { EvrakKategori } from "@/types/evrak";
 
@@ -102,8 +101,8 @@ export function PersonelEvraklar({ personelId, aktifDonemId }: PersonelEvraklarP
   };
 
   const handleOnizle = async (objectKey: string, dosyaAdi: string) => {
-    const result = await downloadUrlOlustur({ objectKey });
-    if ("url" in result) {
+    const result = await storageGetDownloadUrl({ objectKey });
+    if (result.success) {
       setOnizlemeUrl(result.url);
       setOnizlemeDosyaAdi(dosyaAdi);
     } else {
@@ -112,8 +111,8 @@ export function PersonelEvraklar({ personelId, aktifDonemId }: PersonelEvraklarP
   };
 
   const handleIndir = async (objectKey: string, dosyaAdi: string) => {
-    const result = await downloadUrlOlustur({ objectKey });
-    if ("url" in result) {
+    const result = await storageGetDownloadUrl({ objectKey });
+    if (result.success) {
       const a = document.createElement("a");
       a.href = result.url;
       a.download = dosyaAdi;

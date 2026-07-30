@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { MaasDetayView } from "@/components/modules/bordro/MaasDetayView";
 
-export const metadata: Metadata = { title: "Maaş Detay — Hilal HR" };
+export const metadata: Metadata = { title: "Maaş Detay — Hilal Office" };
 
 export default async function MaasDetayPage({
   params,

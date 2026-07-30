@@ -63,6 +63,16 @@ export function usePersonelList() {
   });
 }
 
+import { getValidMaasAtDate } from "@/lib/utils/index";
+
+// Aktif maaş bulucu (hedef tarih itibarıyla yürürlükte olan maaş)
+export function getAktifMaas(
+  maasGecmisi?: Array<{ maas_net: number; gecerlilik_baslangic: string; gecerlilik_bitis: string | null }>,
+  targetDateStr?: string
+): number | null {
+  return getValidMaasAtDate(maasGecmisi, targetDateStr);
+}
+
 // ─────────────────────────────────────────────
 // Personel invalidate (mutation sonrası)
 // ─────────────────────────────────────────────
@@ -72,9 +82,10 @@ export function useInvalidatePersonelList() {
 
   return () => {
     if (sirketId) {
-      queryClient.invalidateQueries({
-        queryKey: QUERY_KEYS.PERSONEL_LIST(sirketId),
-      });
+      queryClient.invalidateQueries({ queryKey: ["personel"] });
+      queryClient.invalidateQueries({ queryKey: ["maas_gecmisi"] });
+      queryClient.invalidateQueries({ queryKey: ["employment_periods"] });
+      queryClient.invalidateQueries({ queryKey: ["maas_bordro"] });
     }
   };
 }
