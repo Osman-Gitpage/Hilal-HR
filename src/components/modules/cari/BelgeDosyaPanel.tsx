@@ -72,6 +72,7 @@ interface SlotProps {
 
 function Slot({ kategori, dosya, yukleniyor, siliniyor, onYukle, onSil, onGoruntule, onIndir }: SlotProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = React.useState(false);
 
   const isBelge = kategori === "belge";
   const label = isBelge ? "Belge" : "Dekont";
@@ -88,6 +89,9 @@ function Slot({ kategori, dosya, yukleniyor, siliniyor, onYukle, onSil, onGorunt
   const placeholderBorder = isBelge
     ? "border-violet-200/60 dark:border-violet-800/30"
     : "border-emerald-200/60 dark:border-emerald-800/30";
+  const dragActiveBorder = isBelge
+    ? "border-violet-500 bg-violet-50/80 dark:border-violet-400 dark:bg-violet-950/50 scale-[1.02]"
+    : "border-emerald-500 bg-emerald-50/80 dark:border-emerald-400 dark:bg-emerald-950/50 scale-[1.02]";
 
   if (yukleniyor) {
     return (
@@ -164,10 +168,24 @@ function Slot({ kategori, dosya, yukleniyor, siliniyor, onYukle, onSil, onGorunt
   // Boş slot — placeholder
   return (
     <div
-      className={`flex-1 rounded-xl border-2 border-dashed ${placeholderBorder} ${accentHover} 
+      className={`flex-1 rounded-xl border-2 border-dashed ${
+        dragOver
+          ? dragActiveBorder
+          : `${placeholderBorder} ${accentHover}`
+      } 
         p-4 flex flex-col items-center justify-center gap-2 min-h-[110px] 
         cursor-pointer transition-all duration-200 group`}
       onClick={() => inputRef.current?.click()}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
+      onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
+      onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(false); }}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOver(false);
+        const f = e.dataTransfer.files?.[0];
+        if (f) onYukle(f);
+      }}
     >
       <input
         ref={inputRef}
@@ -181,13 +199,17 @@ function Slot({ kategori, dosya, yukleniyor, siliniyor, onYukle, onSil, onGorunt
         }}
       />
       <div className={`h-8 w-8 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110 ${
+        dragOver ? "scale-110" : ""
+      } ${
         isBelge ? "bg-violet-100 dark:bg-violet-900/30" : "bg-emerald-100 dark:bg-emerald-900/30"
       }`}>
         <Icon className={`h-4 w-4 ${accentColor}`} />
       </div>
       <div className="text-center">
         <p className={`text-xs font-semibold ${accentColor}`}>{label} ekle</p>
-        <p className="text-[10px] text-muted-foreground/60 mt-0.5">Tıkla veya sürükle</p>
+        <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+          {dragOver ? "Bırak ve yükle" : "Tıkla veya sürükle"}
+        </p>
       </div>
     </div>
   );
