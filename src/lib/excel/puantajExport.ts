@@ -37,6 +37,7 @@ interface OzetItem {
   personel_id: string;
   sgk_gun_override: number | null;
   maas_saati_override: number | null;
+  mesai_saati_override: number | null;
 }
 
 export interface PuantajExportVeri {
@@ -177,8 +178,10 @@ export function puantajExport(veri: PuantajExportVeri): void {
     const ozet = ozetMap.get(p.id);
     const sgkGunSon = ozet?.sgk_gun_override ?? sgkGun;
     const maasSaatiSon = ozet?.maas_saati_override ?? calisma;
+    const ekMesai = ozet?.mesai_saati_override ?? 0;
+    const toplamMesai = mesai + ekMesai;
 
-    return [adSoyad, unvan, ...gunDegerleri, calisma, mesai, sgkGunSon, maasSaatiSon];
+    return [adSoyad, unvan, ...gunDegerleri, calisma, toplamMesai, sgkGunSon, maasSaatiSon];
   });
 
   // ── Legend satırları ──

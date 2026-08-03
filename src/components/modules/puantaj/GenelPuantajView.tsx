@@ -423,11 +423,12 @@ export function GenelPuantajView() {
     [personellerRaw, sortDir]
   );
   const ozetMap = useMemo(() => {
-    const map = new Map<string, { sgkGun: number | null; maasSaati: number | null }>();
+    const map = new Map<string, { sgkGun: number | null; maasSaati: number | null; mesaiSaati: number | null }>();
     for (const o of ozetler) {
       map.set(o.personel_id, {
         sgkGun: o.sgk_gun_override,
         maasSaati: o.maas_saati_override,
+        mesaiSaati: (o as any).mesai_saati_override ?? null,
       });
     }
     return map;
@@ -435,8 +436,8 @@ export function GenelPuantajView() {
 
   // Özet kaydetme
   const handleOzetKaydet = useCallback(
-    (personelId: string, sgkGun: number | null, maasSaati: number | null) => {
-      ozetKaydetMutation.mutate({ personelId, sgkGun, maasSaati });
+    (personelId: string, sgkGun: number | null, maasSaati: number | null, mesaiSaati: number | null = null) => {
+      ozetKaydetMutation.mutate({ personelId, sgkGun, maasSaati, mesaiSaati });
     },
     [ozetKaydetMutation]
   );
@@ -608,6 +609,9 @@ export function GenelPuantajView() {
                 <TableHead className="min-w-[52px] text-center bg-muted/60 font-semibold">
                   Mesai
                 </TableHead>
+                <TableHead className="min-w-[60px] text-center bg-amber-50 dark:bg-amber-950/20 bg-muted/60 font-semibold text-amber-700 dark:text-amber-400" title="Elle girilen ek mesai saati — korunur, kaybolmaz">
+                  Ek Mesai
+                </TableHead>
                 <TableHead className="min-w-[56px] text-center bg-muted/60 font-semibold" title="Tıklayarak düzzenleyebilirsiniz">
                   SGK Gün
                 </TableHead>
@@ -634,7 +638,7 @@ export function GenelPuantajView() {
               ) : personeller.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={gunler.length + 4}
+                    colSpan={gunler.length + 5}
                     className="text-center py-12 text-muted-foreground"
                   >
                     Bu dönemde aktif personel bulunmuyor.
@@ -690,13 +694,28 @@ export function GenelPuantajView() {
                         const { calisma, mesai, sgkGun } = hesaplaToplam(p.id);
                         const ozet = ozetMap.get(p.id);
                         const maasSaatiHesap = calisma; // default: calisma saati
+                        const ekMesai = ozet?.mesaiSaati ?? null;
+                        const toplamMesai = mesai + (ekMesai ?? 0);
                         return (
                           <>
                             <TableCell className="text-center font-semibold bg-muted/30 border-l tabular-nums">
                               {calisma > 0 ? calisma : "—"}
                             </TableCell>
                             <TableCell className="text-center bg-muted/30 tabular-nums text-amber-700 dark:text-amber-400 font-medium">
-                              {mesai > 0 ? mesai : "—"}
+                              {toplamMesai > 0 ? toplamMesai : "—"}
+                            </TableCell>
+                            <TableCell className="bg-amber-50/60 dark:bg-amber-950/10 p-0.5">
+                              <OzetHucre
+                                hesaplanan={0}
+                                override={ekMesai}
+                                onSave={(val) => handleOzetKaydet(
+                                  p.id,
+                                  ozet?.sgkGun ?? null,
+                                  ozet?.maasSaati ?? null,
+                                  val
+                                )}
+                                suffix="s"
+                              />
                             </TableCell>
                             <TableCell className="bg-muted/30 p-0.5">
                               <OzetHucre
@@ -705,7 +724,8 @@ export function GenelPuantajView() {
                                 onSave={(val) => handleOzetKaydet(
                                   p.id,
                                   val,
-                                  ozet?.maasSaati ?? null
+                                  ozet?.maasSaati ?? null,
+                                  ozet?.mesaiSaati ?? null
                                 )}
                               />
                             </TableCell>
@@ -716,7 +736,8 @@ export function GenelPuantajView() {
                                 onSave={(val) => handleOzetKaydet(
                                   p.id,
                                   ozet?.sgkGun ?? null,
-                                  val
+                                  val,
+                                  ozet?.mesaiSaati ?? null
                                 )}
                                 suffix="s"
                               />
@@ -745,7 +766,7 @@ export function GenelPuantajView() {
             Mavi nokta = proje saati (hover ile proje adı)
           </span>
           <span className="flex items-center gap-1 text-primary/70">
-            ✎ SGK Gün / Maaş Saat = tıklayarak düzenle
+            ✎ SGK Gün / Maaş Saat / Ek Mesai = tıklayarak düzenle
           </span>
           {Object.entries(OZEL_DURUMLAR).map(([, oz]) => (
             <Badge

@@ -1011,7 +1011,7 @@ export async function ayOzetGetir(yil: number, ay: number) {
 
   const { data, error } = await supabase
     .from("puantaj_ay_ozet")
-    .select("personel_id, sgk_gun_override, maas_saati_override")
+    .select("personel_id, sgk_gun_override, maas_saati_override, mesai_saati_override")
     .eq("sirket_id", sirketId)
     .eq("yil", yil)
     .eq("ay", ay);
@@ -1021,6 +1021,7 @@ export async function ayOzetGetir(yil: number, ay: number) {
     personel_id: string;
     sgk_gun_override: number | null;
     maas_saati_override: number | null;
+    mesai_saati_override: number | null;
   }[];
 }
 
@@ -1032,7 +1033,8 @@ export async function ayOzetKaydet(
   yil: number,
   ay: number,
   sgkGun: number | null,
-  maasSaati: number | null
+  maasSaati: number | null,
+  mesaiSaati: number | null = null
 ) {
   const { supabase, sirketId } = await getAuthContext();
 
@@ -1046,6 +1048,7 @@ export async function ayOzetKaydet(
         ay,
         sgk_gun_override: sgkGun,
         maas_saati_override: maasSaati,
+        mesai_saati_override: mesaiSaati,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "sirket_id,personel_id,yil,ay" }

@@ -36,6 +36,7 @@ export interface PuantajPdfVeri {
     personel_id: string;
     sgk_gun_override: number | null;
     maas_saati_override: number | null;
+    mesai_saati_override: number | null;
   }[];
   yil: number;
   ay: number;
@@ -85,7 +86,7 @@ async function _olustur(veri: PuantajPdfVeri): Promise<jsPDF> {
   }
 
   // Özet haritası (override'lar için)
-  const ozetMap = new Map<string, { sgk_gun_override: number | null; maas_saati_override: number | null }>();
+  const ozetMap = new Map<string, { sgk_gun_override: number | null; maas_saati_override: number | null; mesai_saati_override: number | null }>();
   if (ozetler) {
     for (const o of ozetler) {
       ozetMap.set(o.personel_id, o);
@@ -151,13 +152,15 @@ async function _olustur(veri: PuantajPdfVeri): Promise<jsPDF> {
     const ozet = ozetMap.get(p.id);
     const finalSgk = ozet?.sgk_gun_override ?? sgkGun;
     const finalMaas = ozet?.maas_saati_override ?? calisma;
+    const ekMesai = ozet?.mesai_saati_override ?? 0;
+    const finalMesai = mesai + ekMesai;
 
     // Metrik toplamlarını biriktir
     toplamCalisma += calisma;
-    toplamMesai += mesai;
+    toplamMesai += finalMesai;
 
     row.toplam = calisma > 0 ? calisma : "-";
-    row.mesai = mesai > 0 ? mesai : "-";
+    row.mesai = finalMesai > 0 ? finalMesai : "-";
     row.sgk = finalSgk > 0 ? finalSgk : "-";
     row.maas = finalMaas > 0 ? finalMaas : "-";
 

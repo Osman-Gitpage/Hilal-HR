@@ -1029,6 +1029,7 @@ export type Database = {
           created_at: string | null
           id: string
           maas_saati_override: number | null
+          mesai_saati_override: number | null
           personel_id: string
           sgk_gun_override: number | null
           sirket_id: string
@@ -1040,6 +1041,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           maas_saati_override?: number | null
+          mesai_saati_override?: number | null
           personel_id: string
           sgk_gun_override?: number | null
           sirket_id: string
@@ -1051,6 +1053,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           maas_saati_override?: number | null
+          mesai_saati_override?: number | null
           personel_id?: string
           sgk_gun_override?: number | null
           sirket_id?: string

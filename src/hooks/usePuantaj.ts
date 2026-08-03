@@ -416,6 +416,7 @@ export type AyOzetSatir = {
   personel_id: string;
   sgk_gun_override: number | null;
   maas_saati_override: number | null;
+  mesai_saati_override: number | null;
 };
 
 export function useAyOzet(yil: number, ay: number) {
@@ -438,11 +439,13 @@ export function useAyOzetKaydet(yil: number, ay: number) {
       personelId,
       sgkGun,
       maasSaati,
+      mesaiSaati,
     }: {
       personelId: string;
       sgkGun: number | null;
       maasSaati: number | null;
-    }) => ayOzetKaydet(personelId, yil, ay, sgkGun, maasSaati),
+      mesaiSaati: number | null;
+    }) => ayOzetKaydet(personelId, yil, ay, sgkGun, maasSaati, mesaiSaati),
     onSuccess: async () => {
       if (!sirketId) return;
       await queryClient.refetchQueries({
