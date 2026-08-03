@@ -10,6 +10,7 @@ import {
   Loader2,
   Users,
   CalendarDays,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -57,6 +58,18 @@ interface Props {
 }
 
 // ─────────────────────────────────────────────
+// Yardımcı: mesai saati hesapla
+// ─────────────────────────────────────────────
+function hesaplaMesai(baslangic: string, bitis: string): number | null {
+  if (!baslangic || !bitis) return null;
+  const [bh, bm] = baslangic.split(":").map(Number);
+  const [eh, em] = bitis.split(":").map(Number);
+  const dakika = eh * 60 + em - (bh * 60 + bm);
+  if (dakika <= 0) return null;
+  return Math.round((dakika / 60) * 100) / 100;
+}
+
+// ─────────────────────────────────────────────
 // Panel
 // ─────────────────────────────────────────────
 export function TopluGunGirisiPanel({
@@ -79,7 +92,18 @@ export function TopluGunGirisiPanel({
   const [cikis_saati, setCikisSaati] = useState<string>("");
   const [ozel_durum, setOzelDurum] = useState<OzelDurum | "">("");
 
+  // ── Mesai ──
+  const [mesaiBaslangic, setMesaiBaslangic] = useState("");
+  const [mesaiBitis, setMesaiBitis] = useState("");
+  const [tamYarimMesai, setTamYarimMesai] = useState<number | null>(null);
+  const [ozelMesaiGiris, setOzelMesaiGiris] = useState("");
+  // PM özel mesai miktarı (varsayılan 16)
+  const [pazarMesaiGiris, setPazarMesaiGiris] = useState("16");
+
   const mutation = useTopluGunGirisi(yil, ay);
+
+  // Hesaplanan mesai (saat modunda)
+  const hesaplananMesai = hesaplaMesai(mesaiBaslangic, mesaiBitis);
 
   // ── Personel toggle ──
   function togglePersonel(id: string) {
@@ -109,7 +133,6 @@ export function TopluGunGirisiPanel({
   }
   function tumHaftaIciSec() {
     const hafataIci = gunler.filter((g) => !g.pazar).map((g) => g.tarihStr);
-    // Tüm hafta içi zaten seçiliyse temizle
     const tumSecili = hafataIci.every((t) => seciliGunler.has(t));
     if (tumSecili) {
       setSeciliGunler((prev) => {
@@ -150,13 +173,37 @@ export function TopluGunGirisiPanel({
   async function handleUygula() {
     if (!uygulanabilir) return;
 
+    // Mesai hesapla
+    let mesaiSaati: number | null = null;
+
+    if (mod === "saat") {
+      if (hesaplananMesai !== null) {
+        mesaiSaati = hesaplananMesai;
+      } else if (ozelMesaiGiris) {
+        const ozel = parseFloat(ozelMesaiGiris);
+        mesaiSaati = !isNaN(ozel) && ozel > 0 ? ozel : null;
+      } else if (tamYarimMesai !== null) {
+        mesaiSaati = tamYarimMesai;
+      }
+    }
+
     const veri: PuantajGunVerisi =
       mod === "ozel"
-        ? { ozel_durum: ozel_durum as OzelDurum }
+        ? {
+            ozel_durum: ozel_durum as OzelDurum,
+            mesai_saati:
+              ozel_durum === "PM"
+                ? (() => {
+                    const pm = parseFloat(pazarMesaiGiris);
+                    return !isNaN(pm) && pm > 0 ? pm : null;
+                  })()
+                : null,
+          }
         : {
             calisma_saati: parseFloat(calisma_saati),
             giris_saati: giris_saati || null,
             cikis_saati: cikis_saati || null,
+            mesai_saati: mesaiSaati,
           };
 
     const kayitlar: { personelId: string; tarih: string; veri: PuantajGunVerisi }[] = [];
@@ -189,6 +236,12 @@ export function TopluGunGirisiPanel({
 
     setSeciliPersoneller(new Set());
     setSeciliGunler(new Set());
+    // Mesai sıfırla
+    setMesaiBaslangic("");
+    setMesaiBitis("");
+    setTamYarimMesai(null);
+    setOzelMesaiGiris("");
+    setPazarMesaiGiris("16");
   }
 
   return (
@@ -347,6 +400,7 @@ export function TopluGunGirisiPanel({
             </button>
           </div>
 
+          {/* ── Çalışma Saati Modu ── */}
           {mod === "saat" ? (
             <div className="space-y-2">
               <div className="space-y-1">
@@ -391,31 +445,172 @@ export function TopluGunGirisiPanel({
                   />
                 </div>
               </div>
+
+              {/* ── Mesai Bölümü ── */}
+              <div className="border-t pt-2 space-y-1.5">
+                <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  Mesai <span className="font-normal">(Opsiyonel)</span>
+                </p>
+
+                {/* Hızlı butonlar */}
+                <div className="flex gap-1.5 flex-wrap items-center">
+                  {([1.5, 3] as const).map((saat) => (
+                    <button
+                      key={saat}
+                      type="button"
+                      id={`btn-toplu-mesai-${String(saat).replace(".", "-")}`}
+                      onClick={() => {
+                        setTamYarimMesai(tamYarimMesai === saat ? null : saat);
+                        setOzelMesaiGiris("");
+                        setMesaiBaslangic("");
+                        setMesaiBitis("");
+                      }}
+                      className={[
+                        "rounded-md border px-2.5 py-1 text-[11px] font-semibold transition-all",
+                        tamYarimMesai === saat && !ozelMesaiGiris && !hesaplananMesai
+                          ? "border-amber-500 bg-amber-500/10 text-amber-600 ring-1 ring-amber-400/30"
+                          : "border-border bg-card text-foreground hover:border-amber-400/40 hover:bg-muted/50",
+                      ].join(" ")}
+                    >
+                      {saat} saat
+                    </button>
+                  ))}
+
+                  {/* Özel saat girişi */}
+                  <Input
+                    id="input-toplu-mesai-ozel"
+                    type="number"
+                    min="0.5"
+                    max="24"
+                    step="0.5"
+                    placeholder="Özel…"
+                    value={ozelMesaiGiris}
+                    onChange={(e) => {
+                      setOzelMesaiGiris(e.target.value);
+                      if (e.target.value) {
+                        setTamYarimMesai(null);
+                        setMesaiBaslangic("");
+                        setMesaiBitis("");
+                      }
+                    }}
+                    className={[
+                      "h-7 w-20 text-xs text-center tabular-nums",
+                      ozelMesaiGiris ? "border-amber-500 ring-1 ring-amber-400/30" : "",
+                    ].join(" ")}
+                  />
+                  <span className="text-[10px] text-muted-foreground">saat</span>
+                </div>
+
+                {/* Saat aralığı girişi */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Başlangıç</Label>
+                    <Input
+                      id="input-toplu-mesai-baslangic"
+                      type="time"
+                      value={mesaiBaslangic}
+                      onChange={(e) => {
+                        setMesaiBaslangic(e.target.value);
+                        if (e.target.value) {
+                          setTamYarimMesai(null);
+                          setOzelMesaiGiris("");
+                        }
+                      }}
+                      className="h-7 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Bitiş</Label>
+                    <Input
+                      id="input-toplu-mesai-bitis"
+                      type="time"
+                      value={mesaiBitis}
+                      onChange={(e) => {
+                        setMesaiBitis(e.target.value);
+                        if (e.target.value) {
+                          setTamYarimMesai(null);
+                          setOzelMesaiGiris("");
+                        }
+                      }}
+                      min={mesaiBaslangic}
+                      className="h-7 text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Hesaplanan mesai özeti */}
+                {(hesaplananMesai !== null ||
+                  tamYarimMesai !== null ||
+                  (ozelMesaiGiris && parseFloat(ozelMesaiGiris) > 0)) && (
+                  <div className="flex items-center gap-2 rounded-md bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1.5 text-xs">
+                    <span className="text-amber-700 dark:text-amber-400">Mesai:</span>
+                    <span className="font-semibold tabular-nums text-amber-700 dark:text-amber-400">
+                      {hesaplananMesai !== null
+                        ? hesaplananMesai
+                        : ozelMesaiGiris
+                          ? parseFloat(ozelMesaiGiris)
+                          : tamYarimMesai}{" "}
+                      saat
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
-            <div className="space-y-1">
-              <Label className="text-[11px] text-muted-foreground">
-                Durum
-              </Label>
-              <Select
-                value={ozel_durum}
-                onValueChange={(v) => setOzelDurum(v as OzelDurum)}
-              >
-                <SelectTrigger
-                  id="select-toplu-ozel-durum"
-                  className="h-8 text-xs"
+            /* ── Özel Durum Modu ── */
+            <div className="space-y-2">
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">
+                  Durum
+                </Label>
+                <Select
+                  value={ozel_durum}
+                  onValueChange={(v) => setOzelDurum(v as OzelDurum)}
                 >
-                  <SelectValue placeholder="Durum seçin..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(OZEL_DURUMLAR).map(([key, oz]) => (
-                    <SelectItem key={key} value={key} className="text-xs">
-                      <span className="font-bold mr-2">{oz.kod}</span>
-                      {oz.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                  <SelectTrigger
+                    id="select-toplu-ozel-durum"
+                    className="h-8 text-xs"
+                  >
+                    <SelectValue placeholder="Durum seçin..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(OZEL_DURUMLAR).map(([key, oz]) => (
+                      <SelectItem key={key} value={key} className="text-xs">
+                        <span className="font-bold mr-2">{oz.kod}</span>
+                        {oz.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* PM seçilince pazar mesaisi */}
+              {ozel_durum === "PM" && (
+                <div className="flex items-center gap-3 rounded-lg border border-pink-200 bg-pink-50 dark:bg-pink-950/30 dark:border-pink-800 px-3 py-2">
+                  <div className="flex-1">
+                    <p className="text-[11px] font-medium text-pink-700 dark:text-pink-300 mb-0.5">
+                      Pazar Mesaisi Saati
+                    </p>
+                    <p className="text-[10px] text-pink-500 dark:text-pink-400">
+                      Varsayılan 16 saat
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      id="input-toplu-pazar-mesai"
+                      type="number"
+                      min="0.5"
+                      max="48"
+                      step="0.5"
+                      value={pazarMesaiGiris}
+                      onChange={(e) => setPazarMesaiGiris(e.target.value)}
+                      className="h-8 w-16 text-xs text-center tabular-nums border-pink-300 focus:border-pink-500"
+                    />
+                    <span className="text-[11px] text-pink-600 dark:text-pink-400 font-medium">saat</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -456,6 +651,11 @@ export function TopluGunGirisiPanel({
                 onClick={() => {
                   setSeciliPersoneller(new Set());
                   setSeciliGunler(new Set());
+                  setMesaiBaslangic("");
+                  setMesaiBitis("");
+                  setTamYarimMesai(null);
+                  setOzelMesaiGiris("");
+                  setPazarMesaiGiris("16");
                 }}
                 disabled={toplamKayitSayisi === 0}
               >
