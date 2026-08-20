@@ -143,8 +143,9 @@ export function TopluOdemeModal({ belgeler, acik, onKapat }: TopluOdemeModalProp
               <Input
                 id="toplu-kur"
                 type="number"
-                min="0.0001"
-                step="0.0001"
+                min="0.0000000001"
+                step="any"
+                placeholder="1.0000"
                 value={kur}
                 onChange={(e) => setKur(e.target.value)}
                 className="h-9 text-sm"

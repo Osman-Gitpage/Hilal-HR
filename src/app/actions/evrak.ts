@@ -16,29 +16,7 @@ import type {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // AUTH CONTEXT
-// ═══════════════════════════════════════════════════════════════════════════════
-
-async function getAuthContext() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/giris");
-
-  const { data: ks, error: ksError } = await supabase
-    .from("kullanici_sirket")
-    .select("sirket_id")
-    .eq("kullanici_id", user.id)
-    .limit(1)
-    .maybeSingle();
-
-  if (ksError) throw new Error(`Şirket sorgusu başarısız: ${ksError.message}`);
-  if (!ks)
-    throw new Error("Bu kullanıcıya ait şirket kaydı bulunamadı.");
-
-  return { supabase, user, sirketId: (ks as any).sirket_id as string };
-}
+import { getAuthContext } from "@/lib/auth/context";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOG YARDIMCISI (internal)

@@ -3,7 +3,7 @@
 
 import type { ParaBirimi, BelgeTur, OdemeDurumu, Odeme, OdemeYontem } from "@/types/cari";
 
-// ── Para Birimi Formatla ─────────────────────────────────────────────────────
+// ── Para Birimi & Kur Formatla ───────────────────────────────────────────────
 
 const formatCache: Partial<Record<ParaBirimi, Intl.NumberFormat>> = {};
 
@@ -21,6 +21,21 @@ export function paraFormat(tutar: number, pb: ParaBirimi): string {
     });
   }
   return formatCache[pb]!.format(tutar);
+}
+
+/**
+ * Döviz kurunu standart olarak en az 4, girilmişse 10 ondalık basamağa kadar gösterir.
+ * @example formatKur(1.0001) → "1.0001"
+ * @example formatKur(34.5) → "34.5000"
+ * @example formatKur(1.0000000001) → "1.0000000001"
+ */
+export function formatKur(kur: number): string {
+  if (typeof kur !== "number" || isNaN(kur)) return "1.0000";
+  return kur.toLocaleString("tr-TR", {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 10,
+    useGrouping: false,
+  });
 }
 
 // ── Ödeme Hesaplamaları ──────────────────────────────────────────────────────
@@ -42,11 +57,14 @@ export function odenenToplamTl(odemeler: Odeme[]): number {
 
 /**
  * Belgenin kalan borcunu hesaplar (negatif olamaz).
+ * Kuruş/ondalık yuvarlama farkları için 0.05 TL tolerans uygulanır.
  * @param belgeNormalTutar  belge.tutar (TL cinsinden)
  * @param odenenTl          SUM(odeme.tutar × odeme.kur)
  */
 export function kalanHesapla(belgeNormalTutar: number, odenenTl: number): number {
-  return Math.max(0, belgeNormalTutar - odenenTl);
+  const fark = belgeNormalTutar - odenenTl;
+  if (fark <= 0 || Math.abs(fark) < 0.05) return 0;
+  return fark;
 }
 
 // ── Ödeme Durumu ─────────────────────────────────────────────────────────────
@@ -55,8 +73,8 @@ export function kalanHesapla(belgeNormalTutar: number, odenenTl: number): number
  * Belgenin ödeme durumunu hesaplar.
  *
  * Ödenmedi → SUM(ödemeler) == 0
- * Kısmi    → 0 < SUM(ödemeler) < belge.tutar
- * Ödendi   → SUM(ödemeler) >= belge.tutar
+ * Kısmi    → 0 < SUM(ödemeler) < belge.tutar - 0.05
+ * Ödendi   → SUM(ödemeler) >= belge.tutar - 0.05
  */
 export function calcOdemeDurumu(
   belgeTutar: number,
@@ -64,7 +82,7 @@ export function calcOdemeDurumu(
 ): OdemeDurumu {
   if (belgeTutar <= 0) return "odendi";
   if (odenenTl <= 0) return "odenmedi";
-  if (odenenTl >= belgeTutar) return "odendi";
+  if (odenenTl >= belgeTutar - 0.05) return "odendi";
   return "kismi";
 }
 

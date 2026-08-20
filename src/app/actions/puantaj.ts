@@ -128,7 +128,14 @@ export async function gunVeriGir(
     return { hata: "Bu ay kilitli. Düzenleme yapılamaz." };
   }
 
-  // Çalışma saati otomatik hesapla (giriş-çıkış varsa)
+  // Fazla mesai sınırı (Maksimum 256 saat)
+  if (
+    veri.mesai_saati !== undefined &&
+    veri.mesai_saati !== null &&
+    (veri.mesai_saati < 0 || veri.mesai_saati > 256)
+  ) {
+    return { hata: "Fazla mesai saati 0 ile 256 arasında olmalıdır." };
+  }
   let calisma_saati: number | null = veri.calisma_saati ?? null;
   if (veri.giris_saati && veri.cikis_saati && !calisma_saati) {
     const [gh, gm] = veri.giris_saati.split(":").map(Number);
@@ -292,8 +299,8 @@ export async function projeSaatGir(
 ) {
   const { supabase, sirketId } = await getAuthContext();
 
-  if (saat <= 0 || saat > 24) {
-    return { hata: "Saat değeri 0 ile 24 arasında olmalıdır." };
+  if (saat <= 0 || saat > 256) {
+    return { hata: "Saat değeri 0 ile 256 arasında olmalıdır." };
   }
 
   // Mevcut satırları sil (sum-replace stratejisi)
@@ -1178,4 +1185,421 @@ export async function topluProjePuantajGirisi(
     atlananSayisi: kayitlar.length - aktifKayitlar.length + hataSayisi,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOPLU PUANTAJ VERİSİ GETİR (Genel + Tüm Projeler)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Aktif seçili dönem için Genel Puantaj verilerini ve o aya ait TÜM aktif projelerin
+ * puantaj kayıtlarını tek bir obje halinde döndürür. Toplu çıktı işlemleri için kullanılır.
+ */
+export async function topluPuantajVerisiGetir(yil: number, ay: number) {
+  const { supabase, sirketId, rol } = await getAuthContext();
+
+  const ayBaslangic = `${yil}-${String(ay).padStart(2, "0")}-01`;
+  const ayBitis = `${yil}-${String(ay).padStart(2, "0")}-${new Date(yil, ay, 0).getDate()}`;
+
+  // 1. Personel Listesi
+  const { data: personelList, error: pErr } = await supabase
+    .from("personel")
+    .select(`
+      id, ad, soyad, gorev_unvan,
+      employment_periods!inner (
+        baslangic_tarihi, bitis_tarihi
+      )
+    `)
+    .eq("sirket_id", sirketId)
+    .lte("employment_periods.baslangic_tarihi", ayBitis)
+    .or(
+      `bitis_tarihi.is.null,bitis_tarihi.gte.${ayBaslangic}`,
+      { referencedTable: "employment_periods" }
+    );
+
+  if (pErr) throw new Error(pErr.message);
+
+  // 2. Genel puantaj kayıtları
+  const { data: puantajlar, error: puErr } = await supabase
+    .from("puantaj_genel")
+    .select("*")
+    .eq("sirket_id", sirketId)
+    .gte("tarih", ayBaslangic)
+    .lte("tarih", ayBitis);
+
+  if (puErr) throw new Error(puErr.message);
+
+  // 3. Ay özetleri (ek mesai, sgk gun, maas saati override'ları)
+  const { data: ozetler } = await supabase
+    .from("puantaj_ay_ozet")
+    .select("personel_id, sgk_gun_override, maas_saati_override, mesai_saati_override")
+    .eq("sirket_id", sirketId)
+    .eq("yil", yil)
+    .eq("ay", ay);
+
+  // 4. O ay aktif olan projeler
+  const projeler = await donemAktifProjeleriGetir(yil, ay);
+  const projeIds = projeler.map((p: any) => p.id);
+
+  // 5. Projelere ait tüm puantaj_proje kayıtları
+  let projePuantajlar: any[] = [];
+  if (projeIds.length > 0) {
+    const { data: ppData, error: ppErr } = await supabase
+      .from("puantaj_proje")
+      .select(`
+        id, proje_id, personel_id, tarih, saat, mesai_saati, ozel_durum, aciklama,
+        personel ( id, ad, soyad )
+      `)
+      .eq("sirket_id", sirketId)
+      .in("proje_id", projeIds)
+      .gte("tarih", ayBaslangic)
+      .lte("tarih", ayBitis)
+      .order("tarih", { ascending: true });
+
+    if (ppErr) throw new Error(ppErr.message);
+    projePuantajlar = ppData ?? [];
+  }
+
+  const ayKapali = (puantajlar ?? []).some((p: any) => p.kapali === true);
+
+  return {
+    personeller: (personelList ?? []) as any[],
+    puantajlar: (puantajlar ?? []) as any[],
+    ozetler: (ozetler ?? []) as any[],
+    projeler: (projeler ?? []) as any[],
+    projePuantajlar: (projePuantajlar ?? []) as any[],
+    ayKapali,
+    kullaniciRol: rol,
+    yil,
+    ay,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PERSONEL BAZLI PUANTAJ VE İZİN / DEVAMSIZLIK DÖKÜMÜ
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type PersonelPuantajAylikOzet = {
+  ay: number;
+  ayAdi: string;
+  calisilanGun: number;
+  calismaSaati: number;
+  mesaiSaati: number;
+  yillikIzin: number;
+  raporlu: number;
+  ucretsizIzin: number;
+  calismaYok: number;
+  resmiTatil: number;
+  isKazasi: number;
+  pazarMesaisi: number;
+  toplamDevamsizlik: number; // RP + UI + CY + IK
+  toplamKayit: number;
+};
+
+export type PersonelPuantajKayit = {
+  id: string;
+  tarih: string;
+  giris_saati: string | null;
+  cikis_saati: string | null;
+  calisma_saati: number | null;
+  mesai_saati: number | null;
+  ozel_durum: string | null;
+  aciklama: string | null;
+  kapali: boolean;
+  projeler: {
+    projeId: string;
+    projeAdi: string;
+    saat: number;
+    mesai_saati?: number | null;
+  }[];
+};
+
+export type PersonelPuantajSonucu = {
+  personelId: string;
+  yil: number;
+  seciliAy: number | null;
+  toplamCalisilanGun: number;
+  toplamCalismaSaati: number;
+  toplamMesaiSaati: number;
+  toplamProjeSaati: number;
+  toplamDevamsizlikVeIzinGun: number;
+  toplamGelmedigiGun: number; // RP + UI + CY + IK
+  ozelDurumSayilari: {
+    YI: number;
+    RP: number;
+    UI: number;
+    CY: number;
+    RT: number;
+    PM: number;
+    IK: number;
+    [key: string]: number;
+  };
+  aylikOzetler: PersonelPuantajAylikOzet[];
+  kayitlar: PersonelPuantajKayit[];
+};
+
+const AY_ISIMLERI = [
+  "",
+  "Ocak",
+  "Şubat",
+  "Mart",
+  "Nisan",
+  "Mayıs",
+  "Haziran",
+  "Temmuz",
+  "Ağustos",
+  "Eylül",
+  "Ekim",
+  "Kasım",
+  "Aralık",
+];
+
+/**
+ * Belirli bir personelin seçilen yıl (ve opsiyonel ay) için puantaj,
+ * izin türü kullanımları, devamsızlık/gelmediği gün istatistikleri ve
+ * detaylı günlük kayıtlarını getirir.
+ */
+export async function personelPuantajGetir(
+  personelId: string,
+  yil: number,
+  ay?: number | null
+): Promise<PersonelPuantajSonucu> {
+  const { supabase, sirketId } = await getAuthContext();
+
+  const yilBaslangic = `${yil}-01-01`;
+  const yilBitis = `${yil}-12-31`;
+
+  // 1. Tüm yıla ait puantaj_genel kayıtları (aylık özet hesaplamaları için)
+  const { data: tumYilGenel, error: genErr } = await supabase
+    .from("puantaj_genel")
+    .select("*")
+    .eq("personel_id", personelId)
+    .eq("sirket_id", sirketId)
+    .gte("tarih", yilBaslangic)
+    .lte("tarih", yilBitis)
+    .order("tarih", { ascending: false });
+
+  if (genErr) throw new Error(genErr.message);
+
+  // 2. Tüm yıla ait puantaj_proje kayıtları
+  const { data: tumYilProje, error: prErr } = await supabase
+    .from("puantaj_proje")
+    .select("id, proje_id, tarih, saat, mesai_saati, ozel_durum, aciklama, proje:proje_id(id, ad)")
+    .eq("personel_id", personelId)
+    .eq("sirket_id", sirketId)
+    .gte("tarih", yilBaslangic)
+    .lte("tarih", yilBitis);
+
+  if (prErr) throw new Error(prErr.message);
+
+  const genelList = tumYilGenel ?? [];
+  const projeList = tumYilProje ?? [];
+
+  // Tarihe göre proje eşleştirmesi
+  const projeMap = new Map<string, { projeId: string; projeAdi: string; saat: number; mesai_saati?: number | null }[]>();
+  for (const pr of projeList) {
+    if (!pr.tarih) continue;
+    const items = projeMap.get(pr.tarih) ?? [];
+    items.push({
+      projeId: pr.proje_id,
+      projeAdi: (pr.proje as any)?.ad || "Proje",
+      saat: pr.saat ?? 0,
+      mesai_saati: pr.mesai_saati ?? null,
+    });
+    projeMap.set(pr.tarih, items);
+  }
+
+  // 12 Ay için aylık özetleri hesapla
+  const aylikOzetler: PersonelPuantajAylikOzet[] = [];
+  for (let m = 1; m <= 12; m++) {
+    const ayStr = String(m).padStart(2, "0");
+    const mGenel = genelList.filter((g) => g.tarih.slice(5, 7) === ayStr);
+    const mProje = projeList.filter((p) => p.tarih && p.tarih.slice(5, 7) === ayStr);
+
+    let calisilanGun = 0;
+    let calismaSaati = 0;
+    let mesaiSaati = 0;
+    let yillikIzin = 0;
+    let raporlu = 0;
+    let ucretsizIzin = 0;
+    let calismaYok = 0;
+    let resmiTatil = 0;
+    let isKazasi = 0;
+    let pazarMesaisi = 0;
+
+    for (const g of mGenel) {
+      if (g.ozel_durum) {
+        switch (g.ozel_durum) {
+          case "YI":
+            yillikIzin++;
+            break;
+          case "RP":
+            raporlu++;
+            break;
+          case "UI":
+            ucretsizIzin++;
+            break;
+          case "CY":
+            calismaYok++;
+            break;
+          case "RT":
+            resmiTatil++;
+            break;
+          case "PM":
+            pazarMesaisi++;
+            mesaiSaati += g.mesai_saati ?? 16;
+            break;
+          case "IK":
+            isKazasi++;
+            break;
+        }
+      } else {
+        if ((g.calisma_saati != null && g.calisma_saati > 0) || g.giris_saati) {
+          calisilanGun++;
+          calismaSaati += g.calisma_saati ?? 0;
+        }
+      }
+      if (g.mesai_saati && g.ozel_durum !== "PM") {
+        mesaiSaati += g.mesai_saati;
+      }
+    }
+
+    // Proje saatleri ekle
+    for (const p of mProje) {
+      if (p.saat && p.saat > 0) {
+        // Proje saatleri mesai/çalışma havuzuna eklenir
+        mesaiSaati += p.saat;
+      }
+      if (p.mesai_saati) {
+        mesaiSaati += p.mesai_saati;
+      }
+    }
+
+    const toplamDevamsizlik = raporlu + ucretsizIzin + calismaYok + isKazasi;
+
+    aylikOzetler.push({
+      ay: m,
+      ayAdi: AY_ISIMLERI[m],
+      calisilanGun,
+      calismaSaati: Math.round(calismaSaati * 100) / 100,
+      mesaiSaati: Math.round(mesaiSaati * 100) / 100,
+      yillikIzin,
+      raporlu,
+      ucretsizIzin,
+      calismaYok,
+      resmiTatil,
+      isKazasi,
+      pazarMesaisi,
+      toplamDevamsizlik,
+      toplamKayit: mGenel.length,
+    });
+  }
+
+  // Seçili ay filtresi varsa kayıtları ve periyot toplamlarını filtrele
+  const seciliAyGenel = (ay && ay >= 1 && ay <= 12)
+    ? genelList.filter((g) => g.tarih.slice(5, 7) === String(ay).padStart(2, "0"))
+    : genelList;
+
+  const seciliAyProje = (ay && ay >= 1 && ay <= 12)
+    ? projeList.filter((p) => p.tarih && p.tarih.slice(5, 7) === String(ay).padStart(2, "0"))
+    : projeList;
+
+  // Seçili periyot için toplam istatistikler
+  let toplamCalisilanGun = 0;
+  let toplamCalismaSaati = 0;
+  let toplamMesaiSaati = 0;
+  let toplamProjeSaati = 0;
+
+  const ozelDurumSayilari: Record<string, number> = {
+    YI: 0,
+    RP: 0,
+    UI: 0,
+    CY: 0,
+    RT: 0,
+    PM: 0,
+    IK: 0,
+  };
+
+  for (const g of seciliAyGenel) {
+    if (g.ozel_durum) {
+      ozelDurumSayilari[g.ozel_durum] = (ozelDurumSayilari[g.ozel_durum] || 0) + 1;
+      if (g.ozel_durum === "PM") {
+        toplamMesaiSaati += g.mesai_saati ?? 16;
+      }
+    } else {
+      if ((g.calisma_saati != null && g.calisma_saati > 0) || g.giris_saati) {
+        toplamCalisilanGun++;
+        toplamCalismaSaati += g.calisma_saati ?? 0;
+      }
+    }
+    if (g.mesai_saati && g.ozel_durum !== "PM") {
+      toplamMesaiSaati += g.mesai_saati;
+    }
+  }
+
+  for (const p of seciliAyProje) {
+    if (p.saat && p.saat > 0) {
+      toplamProjeSaati += p.saat;
+      toplamMesaiSaati += p.saat;
+    }
+    if (p.mesai_saati) {
+      toplamMesaiSaati += p.mesai_saati;
+    }
+  }
+
+  const toplamGelmedigiGun =
+    (ozelDurumSayilari["RP"] || 0) +
+    (ozelDurumSayilari["UI"] || 0) +
+    (ozelDurumSayilari["CY"] || 0) +
+    (ozelDurumSayilari["IK"] || 0);
+
+  const toplamDevamsizlikVeIzinGun =
+    toplamGelmedigiGun +
+    (ozelDurumSayilari["YI"] || 0) +
+    (ozelDurumSayilari["RT"] || 0);
+
+  // Günlük kayıtları hazırla
+  // Hem puantaj_genel hem de puantaj_proje'de olan tarihleri birleştir
+  const tumTarihler = new Set<string>();
+  seciliAyGenel.forEach((g) => tumTarihler.add(g.tarih));
+  seciliAyProje.forEach((p) => p.tarih && tumTarihler.add(p.tarih));
+
+  const genelByTarih = new Map<string, any>();
+  seciliAyGenel.forEach((g) => genelByTarih.set(g.tarih, g));
+
+  const sortedTarihler = Array.from(tumTarihler).sort((a, b) => b.localeCompare(a));
+
+  const kayitlar: PersonelPuantajKayit[] = sortedTarihler.map((tarih) => {
+    const g = genelByTarih.get(tarih);
+    const projeler = projeMap.get(tarih) || [];
+    return {
+      id: g?.id || `proje-${tarih}`,
+      tarih,
+      giris_saati: g?.giris_saati ?? null,
+      cikis_saati: g?.cikis_saati ?? null,
+      calisma_saati: g?.calisma_saati ?? null,
+      mesai_saati: g?.mesai_saati ?? null,
+      ozel_durum: g?.ozel_durum ?? null,
+      aciklama: g?.aciklama ?? null,
+      kapali: g?.kapali ?? false,
+      projeler,
+    };
+  });
+
+  return {
+    personelId,
+    yil,
+    seciliAy: ay ?? null,
+    toplamCalisilanGun,
+    toplamCalismaSaati: Math.round(toplamCalismaSaati * 100) / 100,
+    toplamMesaiSaati: Math.round(toplamMesaiSaati * 100) / 100,
+    toplamProjeSaati: Math.round(toplamProjeSaati * 100) / 100,
+    toplamDevamsizlikVeIzinGun,
+    toplamGelmedigiGun,
+    ozelDurumSayilari: ozelDurumSayilari as any,
+    aylikOzetler,
+    kayitlar,
+  };
+}
+
+
 

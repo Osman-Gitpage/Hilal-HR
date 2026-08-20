@@ -115,6 +115,8 @@ export const QUERY_KEYS = {
   PROJELER: (sirketId: string) => ["projeler", sirketId] as const,
   PUANTAJ_AY_OZET: (sirketId: string, yil: number, ay: number) =>
     ["puantaj_ay_ozet", sirketId, yil, ay] as const,
+  PERSONEL_PUANTAJ: (personelId: string, yil: number, ay?: number | null) =>
+    ["personel_puantaj", personelId, yil, ay ?? "tum"] as const,
   // Cari Modülü
   CARI_BELGE_LIST:  (sirketId: string) => ["cari", "belge", "list", sirketId] as const,
   CARI_BELGE_DETAY: (belgeId: string)  => ["cari", "belge", "detay", belgeId] as const,

@@ -6,6 +6,7 @@
 // This eliminates duplication and ensures consistent auth behavior.
 
 import { createClient } from "@/supabase/server";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 // ─── Return Types ─────────────────────────────────────────────────────────────
@@ -25,7 +26,7 @@ export interface AuthContext {
  * Resolves the authenticated user and their active company context.
  *
  * - Verifies Supabase session
- * - Loads company ID and role from `kullanici_sirket`
+ * - Loads active company ID from cookie 'aktif_sirket_id' if available, falling back to first company
  * - Redirects to `/giris` if not authenticated
  * - Throws if no company is associated
  *
@@ -40,19 +41,25 @@ export async function getAuthContext(): Promise<AuthContext> {
 
   if (!user) redirect("/giris");
 
-  const { data: ks, error: ksError } = await supabase
+  const cookieStore = await cookies();
+  const cookieSirketId = cookieStore.get("aktif_sirket_id")?.value;
+
+  const { data: sirketler, error: ksError } = await supabase
     .from("kullanici_sirket")
     .select("sirket_id, rol")
-    .eq("kullanici_id", user.id)
-    .limit(1)
-    .maybeSingle();
+    .eq("kullanici_id", user.id);
 
   if (ksError) {
     throw new Error(`Şirket sorgusu başarısız: ${ksError.message}`);
   }
-  if (!ks) {
+  if (!sirketler || sirketler.length === 0) {
     throw new Error("Bu kullanıcıya ait şirket kaydı bulunamadı.");
   }
+
+  const match = cookieSirketId
+    ? sirketler.find((s) => s.sirket_id === cookieSirketId)
+    : undefined;
+  const ks = match ?? sirketler[0];
 
   return {
     supabase,

@@ -2,11 +2,16 @@
  * src/lib/pdf/puantajPdf.ts
  * Puantaj tablosu PDF — landscape A4, günlük grid
  * Premium tasarıma sahip modern ve şık çıktı tasarımı.
+ * Özellikler:
+ *   - Genel & Proje Puantaj tabloları
+ *   - Ek Mesai sütunu desteği
+ *   - Personel Günlük Notları 2. Sayfada şık tablo halinde gösterim
+ *   - Toplu PDF (Genel + Tüm Projeler tek PDF dosyasında)
  */
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { yeniDoc, pdfBlobUrl, pdfIndir, excelDonemPdf, temizSirketAdi } from "./pdfUtils";
+import { yeniDoc, pdfBlobUrl, pdfIndir, temizSirketAdi } from "./pdfUtils";
 import { OZEL_DURUMLAR } from "@/lib/constants";
 import { useSirketStore } from "@/stores/sirketStore";
 
@@ -20,6 +25,7 @@ interface HucreDurumu {
   mesai_saati?: number | null;
   ozel_durum?: string | null;
   giris_saati?: string | null;
+  aciklama?: string | null;
 }
 
 interface Personel {
@@ -43,6 +49,36 @@ export interface PuantajPdfVeri {
   baslik?: string;
 }
 
+export interface ProjePuantajPdfVeri {
+  personeller: Personel[];
+  satirlar: (HucreDurumu & { personel_id: string; tarih: string; saat?: number | null })[];
+  projeAdi: string;
+  yil: number;
+  ay: number;
+  baslik?: string;
+}
+
+export interface TopluPuantajPdfVeri {
+  personeller: Personel[];
+  puantajlar: (HucreDurumu & { personel_id: string; tarih: string })[];
+  ozetler?: {
+    personel_id: string;
+    sgk_gun_override: number | null;
+    maas_saati_override: number | null;
+    mesai_saati_override: number | null;
+  }[];
+  projeler: { id: string; ad: string; firma_adi?: string | null }[];
+  projePuantajlar: (HucreDurumu & {
+    proje_id: string;
+    personel_id: string;
+    tarih: string;
+    saat?: number | null;
+    personel?: { id: string; ad: string; soyad: string };
+  })[];
+  yil: number;
+  ay: number;
+}
+
 function gunDeger(veri?: HucreDurumu): string {
   if (!veri) return "";
   if (veri.ozel_durum) {
@@ -50,7 +86,7 @@ function gunDeger(veri?: HucreDurumu): string {
     const kod = oz?.kod ?? veri.ozel_durum;
     const mesai = veri.mesai_saati ?? (oz && oz.saat === 0 && oz.mesai > 0 ? oz.mesai : 0);
     const saat = oz ? oz.saat : 0;
-    
+
     if (saat === 0 && mesai > 0) {
       return `+${mesai}`;
     }
@@ -63,13 +99,130 @@ function gunDeger(veri?: HucreDurumu): string {
   return "";
 }
 
+function formatTarihTR(tarihStr: string): string {
+  const parts = tarihStr.split("-");
+  if (parts.length !== 3) return tarihStr;
+  return `${parts[2]}.${parts[1]}.${parts[0]}`;
+}
+
+// ─────────────────────────────────────────────
+// Notlar Sayfası Ekleme Yardımcısı
+// ─────────────────────────────────────────────
+
+interface NotItemPDF {
+  tarih: string;
+  personelAd: string;
+  unvan: string;
+  projeAdi?: string;
+  durum: string;
+  aciklama: string;
+}
+
+function ekleNotlarSayfasi(
+  doc: jsPDF,
+  notlar: NotItemPDF[],
+  sirketAdi: string,
+  donemMetni: string,
+  altBaslik: string
+) {
+  if (!notlar || notlar.length === 0) return;
+
+  doc.addPage();
+  const w = doc.internal.pageSize.getWidth();
+
+  const columns = [
+    { header: "No", dataKey: "no" },
+    { header: "Tarih", dataKey: "tarih" },
+    { header: "Ad Soyad", dataKey: "adSoyad" },
+    { header: "Unvan", dataKey: "unvan" },
+    ...(notlar.some((n) => !!n.projeAdi) ? [{ header: "Proje", dataKey: "proje" }] : []),
+    { header: "Durum / Çalışma", dataKey: "durum" },
+    { header: "Günlük Not / Açıklama", dataKey: "aciklama" },
+  ];
+
+  const rows = notlar.map((n, i) => ({
+    no: i + 1,
+    tarih: formatTarihTR(n.tarih),
+    adSoyad: n.personelAd,
+    unvan: n.unvan,
+    proje: n.projeAdi ?? "-",
+    durum: n.durum,
+    aciklama: n.aciklama,
+  }));
+
+  autoTable(doc, {
+    columns,
+    body: rows,
+    startY: 28,
+    margin: { left: 10, right: 10 },
+    styles: {
+      font: "Roboto",
+      fontSize: 8,
+      cellPadding: 2,
+      valign: "middle",
+      lineWidth: 0.1,
+      lineColor: [226, 232, 240],
+      textColor: [15, 23, 42],
+    },
+    headStyles: {
+      font: "Roboto",
+      fontStyle: "bold",
+      fillColor: [244, 246, 249],
+      textColor: [15, 41, 77],
+      fontSize: 8.5,
+      cellPadding: 2.5,
+    },
+    columnStyles: {
+      no: { cellWidth: 8, halign: "center" },
+      tarih: { cellWidth: 20, halign: "center" },
+      adSoyad: { cellWidth: 35, fontStyle: "bold" },
+      unvan: { cellWidth: 25 },
+      proje: { cellWidth: 30 },
+      durum: { cellWidth: 22, halign: "center", fontStyle: "bold" },
+      aciklama: { halign: "left" },
+    },
+    didDrawPage: () => {
+      doc.setFont("Roboto", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(15, 41, 77);
+      doc.text(sirketAdi.toUpperCase(), 10, 15);
+
+      doc.setFont("Roboto", "normal");
+      doc.setFontSize(9.5);
+      doc.setTextColor(75, 85, 99);
+      doc.text(`PERSONEL GÜNLÜK NOTLARI — ${altBaslik}`, 10, 21);
+
+      doc.setFont("Roboto", "bold");
+      doc.setFontSize(11.5);
+      doc.setTextColor(15, 41, 77);
+      doc.text(donemMetni, w - 10, 15, { align: "right" });
+
+      doc.setDrawColor(30, 64, 175);
+      doc.setLineWidth(0.4);
+      doc.line(10, 24, w - 10, 24);
+    },
+  });
+}
+
+// ─────────────────────────────────────────────
+// GENEL PUANTAJ PDF OLUŞTURMA
+// ─────────────────────────────────────────────
+
 async function _olustur(veri: PuantajPdfVeri): Promise<jsPDF> {
+  const doc = await yeniDoc("landscape");
+  (doc as any).isCustomFooter = true;
+  await _sayfaEkleGenel(doc, veri);
+  _sayfaNumaralariEkle(doc);
+  return doc;
+}
+
+async function _sayfaEkleGenel(doc: jsPDF, veri: PuantajPdfVeri): Promise<void> {
   const { personeller, puantajlar, ozetler, yil, ay, baslik } = veri;
   const sonGun = new Date(yil, ay, 0).getDate();
 
-  // Aktif şirket adı ve bugünün tarihi
   const sirketAdi = temizSirketAdi(useSirketStore.getState().aktifSirket?.ad || "HİLAL İZOLASYON");
   const bugunStr = new Date().toLocaleDateString("tr-TR");
+  const donemMetni = `${AY_ADLARI[ay]} ${yil}`;
 
   const gunler = Array.from({ length: sonGun }, (_, i) => {
     const gun = i + 1;
@@ -78,27 +231,41 @@ async function _olustur(veri: PuantajPdfVeri): Promise<jsPDF> {
     return { gun, tarih, haftaGunu, pazar: haftaGunu === 0 };
   });
 
-  // Puantaj haritası
+  // Puantaj haritası & Günlük Notlar
   const pMap = new Map<string, Map<string, HucreDurumu>>();
+  const notlar: NotItemPDF[] = [];
+
+  const persMap = new Map<string, Personel>();
+  for (const p of personeller) persMap.set(p.id, p);
+
   for (const p of puantajlar) {
     if (!pMap.has(p.personel_id)) pMap.set(p.personel_id, new Map());
     pMap.get(p.personel_id)!.set(p.tarih, p);
-  }
 
-  // Özet haritası (override'lar için)
-  const ozetMap = new Map<string, { sgk_gun_override: number | null; maas_saati_override: number | null; mesai_saati_override: number | null }>();
-  if (ozetler) {
-    for (const o of ozetler) {
-      ozetMap.set(o.personel_id, o);
+    if (p.aciklama && p.aciklama.trim()) {
+      const pers = persMap.get(p.personel_id);
+      if (pers) {
+        notlar.push({
+          tarih: p.tarih,
+          personelAd: `${pers.ad} ${pers.soyad}`,
+          unvan: pers.gorev_unvan ?? "-",
+          durum: gunDeger(p) || "-",
+          aciklama: p.aciklama.trim(),
+        });
+      }
     }
   }
 
-  const doc = await yeniDoc("landscape");
-  (doc as any).isCustomFooter = true;
+  // Özet haritası (override'lar)
+  const ozetMap = new Map<string, { sgk_gun_override: number | null; maas_saati_override: number | null; mesai_saati_override: number | null }>();
+  if (ozetler) {
+    for (const o of ozetler) ozetMap.set(o.personel_id, o);
+  }
+
   const w = doc.internal.pageSize.getWidth();
   const h = doc.internal.pageSize.getHeight();
 
-  // Tablo başlıkları
+  // Tablo başlıkları (Ek Mesai sütunu eklendi)
   const columns = [
     { header: "No", dataKey: "no" },
     { header: "Ad Soyad", dataKey: "adSoyad" },
@@ -108,11 +275,11 @@ async function _olustur(veri: PuantajPdfVeri): Promise<jsPDF> {
     })),
     { header: "Toplam", dataKey: "toplam" },
     { header: "Mesai", dataKey: "mesai" },
+    { header: "Ek Mesai", dataKey: "ekMesai" },
     { header: "SGK", dataKey: "sgk" },
     { header: "Maaş", dataKey: "maas" },
   ];
 
-  // Tablo satırları ve metrik toplamları
   let toplamCalisma = 0;
   let toplamMesai = 0;
 
@@ -155,31 +322,29 @@ async function _olustur(veri: PuantajPdfVeri): Promise<jsPDF> {
     const ekMesai = ozet?.mesai_saati_override ?? 0;
     const finalMesai = mesai + ekMesai;
 
-    // Metrik toplamlarını biriktir
     toplamCalisma += calisma;
     toplamMesai += finalMesai;
 
     row.toplam = calisma > 0 ? calisma : "-";
     row.mesai = finalMesai > 0 ? finalMesai : "-";
+    row.ekMesai = ekMesai > 0 ? ekMesai : "-";
     row.sgk = finalSgk > 0 ? finalSgk : "-";
     row.maas = finalMaas > 0 ? finalMaas : "-";
 
     return row;
   });
 
-  // Dinamik sütun genişliği hesaplama (gün kolonları tam sığsın diye)
-  // No: 5mm, Ad Soyad: 33mm, toplam: 13mm, mesai: 11mm, sgk: 9mm, maas: 10mm (toplam 81mm)
-  // Sabit kolonlar toplamı = 5 + 33 + 13 + 11 + 9 + 10 = 81mm
-  // Kalan genişlik gün kolonlarına paylaştırılır
-  const gunGenisligi = (w - 20 - 5 - 33 - 43) / sonGun;
+  // Sabit kolonlar toplamı = No: 5, Ad Soyad: 32, Toplam: 11, Mesai: 9, Ek Mesai: 10, SGK: 8, Maaş: 9 (toplam 84mm)
+  const gunGenisligi = (w - 20 - 5 - 32 - 47) / sonGun;
 
   const columnStyles: Record<string, any> = {
     no: { cellWidth: 5, textColor: [100, 116, 139] },
-    adSoyad: { halign: "left", cellWidth: 33, textColor: [15, 23, 42] },
-    toplam: { fontStyle: "bold", cellWidth: 13, textColor: [15, 23, 42] },
-    mesai: { fontStyle: "bold", cellWidth: 11, textColor: [15, 23, 42] },
-    sgk: { fontStyle: "bold", cellWidth: 9, textColor: [15, 23, 42] },
-    maas: { fontStyle: "bold", cellWidth: 10, textColor: [15, 23, 42] },
+    adSoyad: { halign: "left", cellWidth: 32, textColor: [15, 23, 42] },
+    toplam: { fontStyle: "bold", cellWidth: 11, textColor: [15, 23, 42] },
+    mesai: { fontStyle: "bold", cellWidth: 9, textColor: [15, 23, 42] },
+    ekMesai: { fontStyle: "bold", cellWidth: 10, textColor: [180, 83, 9] }, // Amber 700
+    sgk: { fontStyle: "bold", cellWidth: 8, textColor: [15, 23, 42] },
+    maas: { fontStyle: "bold", cellWidth: 9, textColor: [15, 23, 42] },
   };
 
   for (let d = 1; d <= sonGun; d++) {
@@ -198,14 +363,14 @@ async function _olustur(veri: PuantajPdfVeri): Promise<jsPDF> {
       halign: "center",
       valign: "middle",
       lineWidth: 0.1,
-      lineColor: [226, 232, 240], // #e2e8f0 ince çizgiler
-      textColor: [15, 23, 42], // Slate 900 (Koyu siyah/lacivert, soluk kalmaması için)
+      lineColor: [226, 232, 240],
+      textColor: [15, 23, 42],
     },
     headStyles: {
       font: "Roboto",
       fontStyle: "bold",
-      fillColor: [244, 246, 249], // Slate 100
-      textColor: [15, 41, 77], // Slate Navy #0F294D
+      fillColor: [244, 246, 249],
+      textColor: [15, 41, 77],
       fontSize: 7.2,
       cellPadding: 1.5,
     },
@@ -213,51 +378,45 @@ async function _olustur(veri: PuantajPdfVeri): Promise<jsPDF> {
     didParseCell: (data) => {
       const colId = data.column.dataKey as string;
 
-      // Pazar sütunlarını mockup'taki gibi renklendir ve gün sütunlarını kompaktlaştır (Okunabilirlik arttırıldı)
       if (typeof colId === "string" && colId.startsWith("g")) {
         data.cell.styles.fontSize = 6.2;
         data.cell.styles.cellPadding = 0.2;
         if (data.section === "body") {
-          data.cell.styles.fontStyle = "bold"; // Değerlerin net okunması ve soluk kalmaması için kalın yapıyoruz
-          data.cell.styles.textColor = [0, 0, 0]; // Hücredeki değerlerin soluk kalmaması için koyu siyah yapıyoruz
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.textColor = [0, 0, 0];
         }
 
         const gunNum = parseInt(colId.substring(1));
         const { pazar } = gunler[gunNum - 1];
         if (pazar) {
           if (data.section === "head") {
-            data.cell.styles.fillColor = [178, 82, 82]; // Sunday header kırmızımsı #b25252
-            data.cell.styles.textColor = [255, 255, 255]; // Beyaz metin
+            data.cell.styles.fillColor = [178, 82, 82];
+            data.cell.styles.textColor = [255, 255, 255];
           } else if (data.section === "body") {
-            data.cell.styles.fillColor = [253, 245, 245]; // Sunday body açık pembe #fdf5f5
-            data.cell.styles.textColor = [178, 82, 82]; // Kırmızı metin
+            data.cell.styles.fillColor = [253, 245, 245];
+            data.cell.styles.textColor = [178, 82, 82];
           }
         }
       }
 
-      // Özet kolonlarını kalın ve koyu yap
-      if (data.section === "body" && ["toplam", "mesai", "sgk", "maas"].includes(colId)) {
+      if (data.section === "body" && ["toplam", "mesai", "ekMesai", "sgk", "maas"].includes(colId)) {
         data.cell.styles.fontStyle = "bold";
-        data.cell.styles.textColor = [15, 23, 42]; // Slate 900
       }
     },
-    didDrawPage: (data) => {
-      // ─── PREMIUM HEADER ───
+    didDrawPage: () => {
       doc.setFont("Roboto", "bold");
       doc.setFontSize(14);
-      doc.setTextColor(15, 41, 77); // Koyu Lacivert
+      doc.setTextColor(15, 41, 77);
       doc.text(sirketAdi.toUpperCase(), 10, 15);
 
       doc.setFont("Roboto", "normal");
       doc.setFontSize(9.5);
-      doc.setTextColor(75, 85, 99); // Slate Grey
+      doc.setTextColor(75, 85, 99);
       doc.text(baslik || "GENEL PUANTAJ RAPORU", 10, 21);
 
-      // Sağ Taraf
       doc.setFont("Roboto", "bold");
       doc.setFontSize(11.5);
       doc.setTextColor(15, 41, 77);
-      const donemMetni = `${AY_ADLARI[ay]} ${yil}`;
       doc.text(donemMetni, w - 10, 15, { align: "right" });
 
       doc.setFont("Roboto", "normal");
@@ -265,37 +424,33 @@ async function _olustur(veri: PuantajPdfVeri): Promise<jsPDF> {
       doc.setTextColor(113, 128, 150);
       doc.text(`Oluşturulma: ${bugunStr}`, w - 10, 21, { align: "right" });
 
-      // İnce Mavi Ayırıcı Çizgi
-      doc.setDrawColor(30, 64, 175); // Royal Blue #1e40af
+      doc.setDrawColor(30, 64, 175);
       doc.setLineWidth(0.4);
       doc.line(10, 24, w - 10, 24);
     },
   });
 
-  // ─── TEK SATIR ŞIK VE KOMPAKT METRİK KUTUSU (Sadece Son Sayfada) ───
+  // Metrik kutusu
   const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
   let cardY = finalY + 6;
   const cardHeight = 9;
 
-  // Sayfaya sığmıyorsa yeni sayfaya geç
   if (cardY + cardHeight + 15 > h - 12) {
     doc.addPage();
     cardY = 30;
   }
 
-  // Tek geniş kutu çiz
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.3);
   doc.roundedRect(10, cardY, w - 20, cardHeight, 1.5, 1.5, "FD");
 
-  // Dikey separatör çizgileri çiz
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.3);
   doc.line(10 + (w - 20) / 3, cardY + 2, 10 + (w - 20) / 3, cardY + cardHeight - 2);
   doc.line(10 + 2 * (w - 20) / 3, cardY + 2, 10 + 2 * (w - 20) / 3, cardY + cardHeight - 2);
 
-  // Metin 1: Personel Sayısı
+  // Personel Sayısı
   const lbl1 = "Personel Sayısı: ";
   const val1 = String(personeller.length);
   doc.setFont("Roboto", "normal");
@@ -312,7 +467,7 @@ async function _olustur(veri: PuantajPdfVeri): Promise<jsPDF> {
   doc.setTextColor(15, 41, 77);
   doc.text(val1, startX1 + wL1, cardY + 5.8);
 
-  // Metin 2: Toplam Çalışma
+  // Toplam Çalışma
   const lbl2 = "Toplam Çalışma: ";
   const val2 = `${toplamCalisma} Saat`;
   doc.setFont("Roboto", "normal");
@@ -326,10 +481,10 @@ async function _olustur(veri: PuantajPdfVeri): Promise<jsPDF> {
   doc.setTextColor(100, 116, 139);
   doc.text(lbl2, startX2, cardY + 5.8);
   doc.setFont("Roboto", "bold");
-  doc.setTextColor(16, 185, 129); // Zümrüt Yeşili
+  doc.setTextColor(16, 185, 129);
   doc.text(val2, startX2 + wL2, cardY + 5.8);
 
-  // Metin 3: Toplam Mesai
+  // Toplam Mesai
   const lbl3 = "Toplam Mesai: ";
   const val3 = `${toplamMesai} Saat`;
   doc.setFont("Roboto", "normal");
@@ -343,10 +498,10 @@ async function _olustur(veri: PuantajPdfVeri): Promise<jsPDF> {
   doc.setTextColor(100, 116, 139);
   doc.text(lbl3, startX3, cardY + 5.8);
   doc.setFont("Roboto", "bold");
-  doc.setTextColor(245, 158, 11); // Kehribar Sarı
+  doc.setTextColor(245, 158, 11);
   doc.text(val3, startX3 + wL3, cardY + 5.8);
 
-  // ─── KOD AÇIKLAMALARI (LEGEND) ───
+  // Legend
   const legendY = cardY + cardHeight + 6;
   if (legendY + 12 < h - 12) {
     doc.setFont("Roboto", "bold");
@@ -371,55 +526,29 @@ async function _olustur(veri: PuantajPdfVeri): Promise<jsPDF> {
     });
   }
 
-  // ─── DİNAMİK FOOTER EKLEME (SOL VE SAĞ UYUMLU TEK DÖNGÜ) ───
-  const pageCount = (doc as unknown as { internal: { getNumberOfPages: () => number } })
-    .internal.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFont("Roboto", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(156, 163, 175);
+  // Notlar varsa 2. Sayfaya Notlar Tablosu ekle
+  ekleNotlarSayfasi(doc, notlar, sirketAdi, donemMetni, "GENEL PUANTAJ");
+}
 
-    // Sol: Hilal Muhasebe Yazılımı
-    doc.text("Hilal Muhasebe Yazılımı", 10, h - 6);
+// ─────────────────────────────────────────────
+// PROJE PUANTAJ PDF OLUŞTURMA
+// ─────────────────────────────────────────────
 
-    // Sağ: Sayfa X / Y
-    doc.text(`Sayfa ${i} / ${pageCount}`, w - 10, h - 6, { align: "right" });
-  }
-
+async function _olusturProje(veri: ProjePuantajPdfVeri): Promise<jsPDF> {
+  const doc = await yeniDoc("landscape");
+  (doc as any).isCustomFooter = true;
+  await _sayfaEkleProje(doc, veri);
+  _sayfaNumaralariEkle(doc);
   return doc;
 }
 
-export async function puantajPdfOnizle(veri: PuantajPdfVeri): Promise<string> {
-  const doc = await _olustur(veri);
-  return pdfBlobUrl(doc);
-}
-
-export async function puantajPdfIndir(veri: PuantajPdfVeri): Promise<void> {
-  const doc = await _olustur(veri);
-  pdfIndir(doc, `Puantaj_${veri.yil}_${String(veri.ay).padStart(2, "0")}`);
-}
-
-// ─────────────────────────────────────────────
-// PROJE PUANTAJ PDF İŞLEMLERİ
-// ─────────────────────────────────────────────
-
-export interface ProjePuantajPdfVeri {
-  personeller: Personel[];
-  satirlar: (HucreDurumu & { personel_id: string; tarih: string; saat?: number | null })[];
-  projeAdi: string;
-  yil: number;
-  ay: number;
-  baslik?: string;
-}
-
-async function _olusturProje(veri: ProjePuantajPdfVeri): Promise<jsPDF> {
+async function _sayfaEkleProje(doc: jsPDF, veri: ProjePuantajPdfVeri): Promise<void> {
   const { personeller, satirlar, projeAdi, yil, ay, baslik } = veri;
   const sonGun = new Date(yil, ay, 0).getDate();
 
-  // Aktif şirket adı ve bugünün tarihi
   const sirketAdi = temizSirketAdi(useSirketStore.getState().aktifSirket?.ad || "HİLAL İZOLASYON");
   const bugunStr = new Date().toLocaleDateString("tr-TR");
+  const donemMetni = `${AY_ADLARI[ay]} ${yil}`;
 
   const gunler = Array.from({ length: sonGun }, (_, i) => {
     const gun = i + 1;
@@ -428,19 +557,43 @@ async function _olusturProje(veri: ProjePuantajPdfVeri): Promise<jsPDF> {
     return { gun, tarih, haftaGunu, pazar: haftaGunu === 0 };
   });
 
-  // Veri haritası
   const pMap = new Map<string, Map<string, HucreDurumu & { saat?: number | null }>>();
+  const notlar: NotItemPDF[] = [];
+
+  const persMap = new Map<string, Personel>();
+  for (const p of personeller) persMap.set(p.id, p);
+
   for (const s of satirlar) {
     if (!pMap.has(s.personel_id)) pMap.set(s.personel_id, new Map());
     pMap.get(s.personel_id)!.set(s.tarih, s);
+
+    if (s.aciklama && s.aciklama.trim()) {
+      const pers = persMap.get(s.personel_id);
+      const persAd = pers ? `${pers.ad} ${pers.soyad}` : "Bilinmiyor";
+      const unvan = pers?.gorev_unvan ?? "-";
+
+      let durumStr = "-";
+      if (s.ozel_durum) {
+        const oz = OZEL_DURUMLAR[s.ozel_durum as keyof typeof OZEL_DURUMLAR];
+        durumStr = oz?.kod ?? s.ozel_durum;
+      } else if (s.saat != null) {
+        durumStr = `${s.saat}s`;
+      }
+
+      notlar.push({
+        tarih: s.tarih,
+        personelAd: persAd,
+        unvan,
+        projeAdi,
+        durum: durumStr,
+        aciklama: s.aciklama.trim(),
+      });
+    }
   }
 
-  const doc = await yeniDoc("landscape");
-  (doc as any).isCustomFooter = true;
   const w = doc.internal.pageSize.getWidth();
   const h = doc.internal.pageSize.getHeight();
 
-  // Tablo başlıkları
   const columns = [
     { header: "No", dataKey: "no" },
     { header: "Ad Soyad", dataKey: "adSoyad" },
@@ -452,7 +605,6 @@ async function _olusturProje(veri: ProjePuantajPdfVeri): Promise<jsPDF> {
     { header: "Mesai", dataKey: "mesai" },
   ];
 
-  // Tablo satırları ve metrik toplamları
   let toplamCalisma = 0;
   let toplamMesai = 0;
 
@@ -467,8 +619,7 @@ async function _olusturProje(veri: ProjePuantajPdfVeri): Promise<jsPDF> {
 
     for (const { gun, tarih } of gunler) {
       const hData = pMap.get(p.id)?.get(tarih);
-      
-      // Proje hücresi için saat veya özel durum/mesai gösterimi
+
       let val = "";
       if (hData) {
         if (hData.ozel_durum) {
@@ -492,7 +643,6 @@ async function _olusturProje(veri: ProjePuantajPdfVeri): Promise<jsPDF> {
       row[`g${gun}`] = val;
     }
 
-    // Metrik toplamlarını biriktir
     toplamCalisma += calisma;
     toplamMesai += mesai;
     row.toplam = calisma > 0 ? calisma : "-";
@@ -501,8 +651,6 @@ async function _olusturProje(veri: ProjePuantajPdfVeri): Promise<jsPDF> {
     return row;
   });
 
-  // Dinamik sütun genişliği hesaplama
-  // Sabit kolonlar toplamı = No: 5mm, Ad Soyad: 33mm, Toplam: 13mm, Mesai: 11mm = 62mm
   const gunGenisligi = (w - 20 - 5 - 33 - 24) / sonGun;
 
   const columnStyles: Record<string, any> = {
@@ -528,14 +676,14 @@ async function _olusturProje(veri: ProjePuantajPdfVeri): Promise<jsPDF> {
       halign: "center",
       valign: "middle",
       lineWidth: 0.1,
-      lineColor: [226, 232, 240], // ince çizgiler #e2e8f0
-      textColor: [15, 23, 42], // Slate 900 (Koyu siyah/lacivert, soluk kalmaması için)
+      lineColor: [226, 232, 240],
+      textColor: [15, 23, 42],
     },
     headStyles: {
       font: "Roboto",
       fontStyle: "bold",
-      fillColor: [244, 246, 249], // Slate 100
-      textColor: [15, 41, 77], // Slate Navy #0F294D
+      fillColor: [244, 246, 249],
+      textColor: [15, 41, 77],
       fontSize: 7.2,
       cellPadding: 1.5,
     },
@@ -543,51 +691,46 @@ async function _olusturProje(veri: ProjePuantajPdfVeri): Promise<jsPDF> {
     didParseCell: (data) => {
       const colId = data.column.dataKey as string;
 
-      // Pazar sütunlarını mockup'taki gibi renklendir ve gün sütunlarını kompaktlaştır (Okunabilirlik arttırıldı)
       if (typeof colId === "string" && colId.startsWith("g")) {
         data.cell.styles.fontSize = 6.2;
         data.cell.styles.cellPadding = 0.2;
         if (data.section === "body") {
-          data.cell.styles.fontStyle = "bold"; // Değerlerin net okunması ve soluk kalmaması için kalın yapıyoruz
-          data.cell.styles.textColor = [0, 0, 0]; // Hücredeki değerlerin soluk kalmaması için koyu siyah yapıyoruz
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.textColor = [0, 0, 0];
         }
 
         const gunNum = parseInt(colId.substring(1));
         const { pazar } = gunler[gunNum - 1];
         if (pazar) {
           if (data.section === "head") {
-            data.cell.styles.fillColor = [178, 82, 82]; // Sunday header kırmızımsı #b25252
-            data.cell.styles.textColor = [255, 255, 255]; // Beyaz metin
+            data.cell.styles.fillColor = [178, 82, 82];
+            data.cell.styles.textColor = [255, 255, 255];
           } else if (data.section === "body") {
-            data.cell.styles.fillColor = [253, 245, 245]; // Sunday body açık pembe #fdf5f5
-            data.cell.styles.textColor = [178, 82, 82]; // Kırmızı metin
+            data.cell.styles.fillColor = [253, 245, 245];
+            data.cell.styles.textColor = [178, 82, 82];
           }
         }
       }
 
-      // Özet kolonlarını kalın ve koyu yap
       if (data.section === "body" && ["toplam", "mesai"].includes(colId)) {
         data.cell.styles.fontStyle = "bold";
-        data.cell.styles.textColor = [15, 23, 42]; // Slate 900
+        data.cell.styles.textColor = [15, 23, 42];
       }
     },
-    didDrawPage: (data) => {
-      // ─── PREMIUM HEADER ───
+    didDrawPage: () => {
       doc.setFont("Roboto", "bold");
       doc.setFontSize(14);
-      doc.setTextColor(15, 41, 77); // Koyu Lacivert
+      doc.setTextColor(15, 41, 77);
       doc.text(sirketAdi.toUpperCase(), 10, 15);
 
       doc.setFont("Roboto", "normal");
       doc.setFontSize(9.5);
-      doc.setTextColor(75, 85, 99); // Slate Grey
+      doc.setTextColor(75, 85, 99);
       doc.text(baslik || "PROJE PUANTAJ RAPORU", 10, 21);
 
-      // Sağ Taraf
       doc.setFont("Roboto", "bold");
       doc.setFontSize(11.5);
       doc.setTextColor(15, 41, 77);
-      const donemMetni = `${AY_ADLARI[ay]} ${yil}`;
       doc.text(donemMetni, w - 10, 15, { align: "right" });
 
       doc.setFont("Roboto", "normal");
@@ -595,37 +738,31 @@ async function _olusturProje(veri: ProjePuantajPdfVeri): Promise<jsPDF> {
       doc.setTextColor(113, 128, 150);
       doc.text(`Proje: ${projeAdi}`, w - 10, 21, { align: "right" });
 
-      // İnce Mavi Ayırıcı Çizgi
-      doc.setDrawColor(30, 64, 175); // Royal Blue #1e40af
+      doc.setDrawColor(30, 64, 175);
       doc.setLineWidth(0.4);
       doc.line(10, 24, w - 10, 24);
     },
   });
 
-  // ─── TEK SATIR ŞIK VE KOMPAKT METRİK KUTUSU (Sadece Son Sayfada) ───
   const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
   let cardY = finalY + 6;
   const cardHeight = 9;
 
-  // Sayfaya sığmıyorsa yeni sayfaya geç
   if (cardY + cardHeight + 15 > h - 12) {
     doc.addPage();
     cardY = 30;
   }
 
-  // Tek geniş kutu çiz
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.3);
   doc.roundedRect(10, cardY, w - 20, cardHeight, 1.5, 1.5, "FD");
 
-  // Dikey separatör çizgileri çiz
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.3);
   doc.line(10 + (w - 20) / 3, cardY + 2, 10 + (w - 20) / 3, cardY + cardHeight - 2);
   doc.line(10 + 2 * (w - 20) / 3, cardY + 2, 10 + 2 * (w - 20) / 3, cardY + cardHeight - 2);
 
-  // Metin 1: Personel Sayısı
   const lbl1 = "Personel Sayısı: ";
   const val1 = String(personeller.length);
   doc.setFont("Roboto", "normal");
@@ -642,7 +779,6 @@ async function _olusturProje(veri: ProjePuantajPdfVeri): Promise<jsPDF> {
   doc.setTextColor(15, 41, 77);
   doc.text(val1, startX1 + wL1, cardY + 5.8);
 
-  // Metin 2: Toplam Çalışma
   const lbl2 = "Toplam Proje Süresi: ";
   const val2 = `${toplamCalisma} Saat`;
   doc.setFont("Roboto", "normal");
@@ -656,10 +792,9 @@ async function _olusturProje(veri: ProjePuantajPdfVeri): Promise<jsPDF> {
   doc.setTextColor(100, 116, 139);
   doc.text(lbl2, startX2, cardY + 5.8);
   doc.setFont("Roboto", "bold");
-  doc.setTextColor(16, 185, 129); // Zümrüt Yeşili
+  doc.setTextColor(16, 185, 129);
   doc.text(val2, startX2 + wL2, cardY + 5.8);
 
-  // Metin 3: Toplam Mesai
   const lbl3 = "Toplam Mesai: ";
   const val3 = `${toplamMesai} Saat`;
   doc.setFont("Roboto", "normal");
@@ -673,10 +808,9 @@ async function _olusturProje(veri: ProjePuantajPdfVeri): Promise<jsPDF> {
   doc.setTextColor(100, 116, 139);
   doc.text(lbl3, startX3, cardY + 5.8);
   doc.setFont("Roboto", "bold");
-  doc.setTextColor(245, 158, 11); // Kehribar Sarı
+  doc.setTextColor(245, 158, 11);
   doc.text(val3, startX3 + wL3, cardY + 5.8);
 
-  // ─── KOD AÇIKLAMALARI (LEGEND) ───
   const legendY = cardY + cardHeight + 6;
   if (legendY + 12 < h - 12) {
     doc.setFont("Roboto", "bold");
@@ -701,7 +835,43 @@ async function _olusturProje(veri: ProjePuantajPdfVeri): Promise<jsPDF> {
     });
   }
 
-  // ─── DİNAMİK FOOTER EKLEME (SOL VE SAĞ UYUMLU TEK DÖNGÜ) ───
+  // Notlar varsa 2. Sayfaya Notlar Tablosu ekle
+  ekleNotlarSayfasi(doc, notlar, sirketAdi, donemMetni, projeAdi);
+}
+
+// ─────────────────────────────────────────────
+// TOPLU PUANTAJ PDF OLUŞTURMA
+// ─────────────────────────────────────────────
+
+async function _olusturToplu(veri: TopluPuantajPdfVeri): Promise<jsPDF> {
+  const { personeller, puantajlar, ozetler, projeler, projePuantajlar, yil, ay } = veri;
+  const doc = await yeniDoc("landscape");
+  (doc as any).isCustomFooter = true;
+
+  // 1. Genel Puantaj Sayfaları
+  await _sayfaEkleGenel(doc, { personeller, puantajlar, ozetler, yil, ay, baslik: "GENEL PUANTAJ RAPORU (TOPLU)" });
+
+  // 2. Her Bir Proje için Puantaj Sayfaları
+  for (const proje of projeler) {
+    const pSatirlar = projePuantajlar.filter((p) => p.proje_id === proje.id);
+    doc.addPage();
+    await _sayfaEkleProje(doc, {
+      personeller,
+      satirlar: pSatirlar as never,
+      projeAdi: proje.ad,
+      yil,
+      ay,
+      baslik: `PROJE PUANTAJ RAPORU — ${proje.ad}`,
+    });
+  }
+
+  _sayfaNumaralariEkle(doc);
+  return doc;
+}
+
+function _sayfaNumaralariEkle(doc: jsPDF) {
+  const w = doc.internal.pageSize.getWidth();
+  const h = doc.internal.pageSize.getHeight();
   const pageCount = (doc as unknown as { internal: { getNumberOfPages: () => number } })
     .internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
@@ -709,15 +879,23 @@ async function _olusturProje(veri: ProjePuantajPdfVeri): Promise<jsPDF> {
     doc.setFont("Roboto", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(156, 163, 175);
-
-    // Sol: Hilal Muhasebe Yazılımı
     doc.text("Hilal Muhasebe Yazılımı", 10, h - 6);
-
-    // Sağ: Sayfa X / Y
     doc.text(`Sayfa ${i} / ${pageCount}`, w - 10, h - 6, { align: "right" });
   }
+}
 
-  return doc;
+// ─────────────────────────────────────────────
+// DIŞA AKTARILAN PDF FONKSİYONLARI
+// ─────────────────────────────────────────────
+
+export async function puantajPdfOnizle(veri: PuantajPdfVeri): Promise<string> {
+  const doc = await _olustur(veri);
+  return pdfBlobUrl(doc);
+}
+
+export async function puantajPdfIndir(veri: PuantajPdfVeri): Promise<void> {
+  const doc = await _olustur(veri);
+  pdfIndir(doc, `Puantaj_${veri.yil}_${String(veri.ay).padStart(2, "0")}`);
 }
 
 export async function projePuantajPdfOnizle(veri: ProjePuantajPdfVeri): Promise<string> {
@@ -728,4 +906,14 @@ export async function projePuantajPdfOnizle(veri: ProjePuantajPdfVeri): Promise<
 export async function projePuantajPdfIndir(veri: ProjePuantajPdfVeri): Promise<void> {
   const doc = await _olusturProje(veri);
   pdfIndir(doc, `Proje_Puantaj_${veri.projeAdi.replace(/\s+/g, "_")}_${veri.yil}_${String(veri.ay).padStart(2, "0")}`);
+}
+
+export async function topluPuantajPdfOnizle(veri: TopluPuantajPdfVeri): Promise<string> {
+  const doc = await _olusturToplu(veri);
+  return pdfBlobUrl(doc);
+}
+
+export async function topluPuantajPdfIndir(veri: TopluPuantajPdfVeri): Promise<void> {
+  const doc = await _olusturToplu(veri);
+  pdfIndir(doc, `Toplu_Puantaj_${veri.yil}_${String(veri.ay).padStart(2, "0")}`);
 }

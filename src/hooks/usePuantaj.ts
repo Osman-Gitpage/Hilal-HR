@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSirketStore } from "@/stores/sirketStore";
 import { QUERY_KEYS } from "@/lib/constants";
-import { ayPuantajGetir, gunVeriGir, gunVeriSil, ayKapat, ayAc, projePuantajGetir, projeSaatGir, projeSaatSil, projeleriGetir, donemAktifProjeleriGetir, projeEkle, projeGuncelle, projeArsivle, projeAktivasyonu, projeSil, projePuantajVeGenelGir, projePuantajVeGenelSil, ayOzetGetir, ayOzetKaydet, projeDonemLogListele, projeDonemLogEkle, projeDonemLogGuncelle, projeDonemLogSil, projeDetayGetir, topluGunGirisi, topluProjePuantajGirisi, } from "@/app/actions/puantaj";
+import { ayPuantajGetir, gunVeriGir, gunVeriSil, ayKapat, ayAc, projePuantajGetir, projeSaatGir, projeSaatSil, projeleriGetir, donemAktifProjeleriGetir, projeEkle, projeGuncelle, projeArsivle, projeAktivasyonu, projeSil, projePuantajVeGenelGir, projePuantajVeGenelSil, ayOzetGetir, ayOzetKaydet, projeDonemLogListele, projeDonemLogEkle, projeDonemLogGuncelle, projeDonemLogSil, projeDetayGetir, topluGunGirisi, topluProjePuantajGirisi, topluPuantajVerisiGetir, personelPuantajGetir, type PersonelPuantajSonucu } from "@/app/actions/puantaj";
 import type { PuantajGunVerisi, FaturaKodu } from "@/types";
 import type { Database } from "@/supabase/types";
 type Proje = Database["public"]["Tables"]["proje"]["Row"];
@@ -604,4 +604,41 @@ export function useTopluProjePuantajGirisi(
     },
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOPLU PUANTAJ VERİSİ — Query
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function useTopluPuantajVerisi(yil: number, ay: number) {
+  const sirketId = useSirketStore((s) => s.aktifSirketId);
+
+  return useQuery({
+    queryKey: ["puantaj_toplu_veri", sirketId ?? "", yil, ay],
+    queryFn: () => topluPuantajVerisiGetir(yil, ay),
+    enabled: !!sirketId,
+    staleTime: 30_000,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PERSONEL PUANTAJ VE İZİN DÖKÜMÜ — Query
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function usePersonelPuantaj(
+  personelId: string | null,
+  yil: number,
+  ay?: number | null
+) {
+  const sirketId = useSirketStore((s) => s.aktifSirketId);
+
+  return useQuery<PersonelPuantajSonucu>({
+    queryKey: QUERY_KEYS.PERSONEL_PUANTAJ(personelId ?? "", yil, ay),
+    queryFn: () =>
+      personelPuantajGetir(personelId!, yil, ay),
+    enabled: !!sirketId && !!personelId,
+    staleTime: 30_000,
+  });
+}
+
+
 

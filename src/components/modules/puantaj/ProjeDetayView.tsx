@@ -160,27 +160,39 @@ function DonemTimeline({ projeId }: { projeId: string }) {
                     ? <Circle className="h-2 w-2 fill-emerald-500 text-emerald-500" />
                     : <CheckCircle2 className="h-2.5 w-2.5 text-muted-foreground/40" />}
                 </div>
-                <div className="flex-1 min-w-0 pt-0.5 ml-1">
+                <div className="flex-1 min-w-0 pt-0.5 ml-2">
                   {isDuzenleniyor ? (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Input type="date" value={duzenlenen.bitis ?? ""} onChange={e => setDuzenlenen({ ...duzenlenen, bitis: e.target.value || null })} className="h-7 w-36 text-xs" />
-                      <Input placeholder="Açıklama" value={duzenlenen.aciklama ?? ""} onChange={e => setDuzenlenen({ ...duzenlenen, aciklama: e.target.value })} className="h-7 flex-1 text-xs" />
-                      <Button size="sm" className="h-7 text-xs" onClick={() => handleGuncelle(log)} disabled={isPending}>Kaydet</Button>
-                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setDuzenlenen(null)}>İptal</Button>
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                      <Input type="date" value={duzenlenen.bitis ?? ""} onChange={e => setDuzenlenen({ ...duzenlenen, bitis: e.target.value || null })} className="h-8 sm:h-7 w-full sm:w-36 text-xs" />
+                      <Input placeholder="Açıklama" value={duzenlenen.aciklama ?? ""} onChange={e => setDuzenlenen({ ...duzenlenen, aciklama: e.target.value })} className="h-8 sm:h-7 flex-1 text-xs" />
+                      <div className="flex items-center gap-2 justify-end pt-1 sm:pt-0">
+                        <Button size="sm" className="h-7 text-xs" onClick={() => handleGuncelle(log)} disabled={isPending}>Kaydet</Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setDuzenlenen(null)}>İptal</Button>
+                      </div>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <span className="text-sm font-medium tabular-nums">
-                        {formatTarih(log.baslangic)}
-                        <span className="text-muted-foreground mx-2">→</span>
-                        {log.bitis
-                          ? <span className="font-normal text-muted-foreground">{formatTarih(log.bitis)}</span>
-                          : <span className="text-emerald-600 font-semibold">devam ediyor</span>}
-                      </span>
-                      {log.aciklama && <span className="text-xs text-muted-foreground">{log.aciklama}</span>}
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setDuzenlenen({ ...log })} id={`btn-log-duzenle-${log.id}`}><Pencil className="h-3 w-3" /></Button>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 hover:text-destructive" onClick={() => handleSil(log.id)} disabled={isPending} id={`btn-log-sil-${log.id}`}><Trash2 className="h-3 w-3" /></Button>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 min-w-0">
+                        <span className="text-sm font-medium tabular-nums flex items-center flex-wrap gap-1">
+                          <span>{formatTarih(log.baslangic)}</span>
+                          <span className="text-muted-foreground mx-1">→</span>
+                          {log.bitis
+                            ? <span className="font-normal text-muted-foreground">{formatTarih(log.bitis)}</span>
+                            : <span className="text-emerald-600 font-semibold">devam ediyor</span>}
+                        </span>
+                        {log.aciklama && (
+                          <span className="text-xs text-muted-foreground truncate max-w-full sm:max-w-xs">
+                            {log.aciklama}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0 self-end sm:self-auto">
+                        <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-6 sm:w-6" onClick={() => setDuzenlenen({ ...log })} id={`btn-log-duzenle-${log.id}`}>
+                          <Pencil className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-6 sm:w-6 hover:text-destructive text-muted-foreground" onClick={() => handleSil(log.id)} disabled={isPending} id={`btn-log-sil-${log.id}`}>
+                          <Trash2 className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
+                        </Button>
                       </div>
                     </div>
                   )}

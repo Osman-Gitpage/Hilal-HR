@@ -85,6 +85,10 @@ export function HizliPersonelEkleDialog() {
                 id="hizli-ad"
                 name="ad"
                 placeholder="Mehmet"
+                maxLength={50}
+                onInput={(e) => {
+                  e.currentTarget.value = e.currentTarget.value.replace(/[^a-zA-ZçÇğĞıİöÖşŞüÜ\s'-]/g, "");
+                }}
                 required
                 disabled={isPending}
               />
@@ -95,6 +99,10 @@ export function HizliPersonelEkleDialog() {
                 id="hizli-soyad"
                 name="soyad"
                 placeholder="Yılmaz"
+                maxLength={50}
+                onInput={(e) => {
+                  e.currentTarget.value = e.currentTarget.value.replace(/[^a-zA-ZçÇğĞıİöÖşŞüÜ\s'-]/g, "");
+                }}
                 required
                 disabled={isPending}
               />

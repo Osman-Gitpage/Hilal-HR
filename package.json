@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "duyur": "npx tsx scripts/broadcast.ts",
+    "broadcast": "npx tsx scripts/broadcast.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",

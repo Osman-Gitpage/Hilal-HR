@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/tooltip";
 
 import { useBelgeList, useCariKpi, useFirmaList } from "@/hooks/useCari";
-import { paraFormat, tarihFormat } from "@/lib/cari";
+import { paraFormat, formatKur, tarihFormat } from "@/lib/cari";
 import type { BelgeListItem, BelgeTur, OdemeDurumu, ParaBirimi, BelgeListFiltre } from "@/types/cari";
 import { TopluOdemeModal } from "./TopluOdemeModal";
 import { BelgeImportModal } from "./BelgeImportModal";
@@ -412,7 +412,7 @@ function BelgeSatiri({ belge, secili, onSecToggle, onClick }: {
       <TableCell onClick={onClick} className="py-3 text-right font-bold tabular-nums text-sm">
         {paraFormat(belge.tutar, belge.para_birimi)}
         {belge.para_birimi !== "TRY" && belge.kur !== 1 && (
-          <div className="text-[10px] text-muted-foreground/50 font-normal">kur {belge.kur.toFixed(2)}</div>
+          <div className="text-[10px] text-muted-foreground/50 font-normal">kur {formatKur(belge.kur)}</div>
         )}
       </TableCell>
       <TableCell onClick={onClick} className="py-3 text-right tabular-nums text-sm">

@@ -5,6 +5,13 @@ import { createClient } from "@/supabase/server";
 import { createAdminClient } from "@/supabase/admin";
 import { redirect } from "next/navigation";
 
+import {
+  vknOrTcknSchema,
+  telefonGsmSchema,
+  emailSchema,
+  guvenliMetinSchema,
+} from "@/lib/validations/core";
+
 export async function sirketKur(
   _prevState: { hata?: string } | undefined,
   formData: FormData
@@ -18,14 +25,35 @@ export async function sirketKur(
 
   if (!user) redirect("/giris");
 
-  const ad = (formData.get("sirket_adi") as string)?.trim();
-  const vergi_no = (formData.get("vergi_no") as string)?.trim() || null;
-  const telefon = (formData.get("telefon") as string)?.trim() || null;
-  const email = (formData.get("email") as string)?.trim() || null;
+  const rawAd = (formData.get("sirket_adi") as string)?.trim();
+  const rawVkn = (formData.get("vergi_no") as string)?.trim() || undefined;
+  const rawTel = (formData.get("telefon") as string)?.trim() || undefined;
+  const rawMail = (formData.get("email") as string)?.trim() || undefined;
 
-  if (!ad) {
-    return { hata: "Şirket adı zorunludur." };
+  const adParsed = guvenliMetinSchema(2, 200, true).safeParse(rawAd);
+  if (!adParsed.success) {
+    return { hata: "Şirket adı en az 2 karakter olmalıdır." };
   }
+
+  if (rawVkn) {
+    const vknParsed = vknOrTcknSchema.safeParse(rawVkn);
+    if (!vknParsed.success) return { hata: vknParsed.error.issues[0]?.message ?? "Geçersiz vergi numarası." };
+  }
+
+  if (rawTel) {
+    const telParsed = telefonGsmSchema.safeParse(rawTel);
+    if (!telParsed.success) return { hata: telParsed.error.issues[0]?.message ?? "Geçersiz telefon numarası." };
+  }
+
+  if (rawMail) {
+    const mailParsed = emailSchema(false).safeParse(rawMail);
+    if (!mailParsed.success) return { hata: mailParsed.error.issues[0]?.message ?? "Geçersiz e-posta adresi." };
+  }
+
+  const ad = adParsed.data;
+  const vergi_no = rawVkn || null;
+  const telefon = rawTel || null;
+  const email = rawMail || null;
 
   // Admin istemci: RLS'yi atlar, ilk şirket kaydını güvenle açar
   const admin = createAdminClient();

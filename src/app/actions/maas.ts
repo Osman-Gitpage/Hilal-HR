@@ -14,40 +14,7 @@ import type {
 // T2.1: Cookie'den aktif şirket ID'si okunur ve DB'de doğrulanır.
 //       Birden fazla şirkete erişimi olan kullanıcıda doğru şirket seçilir.
 // ─────────────────────────────────────────────────────────────────────────────
-async function getAuthContext() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/giris");
-
-  // Cookie'den aktif şirket ID'si
-  const cookieStore = await cookies();
-  const cookieSirketId = cookieStore.get("aktif_sirket_id")?.value;
-
-  // Kullanıcının erişebildiği tüm şirket kayıtları
-  const { data: sirketler, error: ksError } = await supabase
-    .from("kullanici_sirket")
-    .select("sirket_id, rol")
-    .eq("kullanici_id", user.id);
-
-  if (ksError) throw new Error(`Şirket sorgusu başarısız: ${ksError.message}`);
-  if (!sirketler?.length) throw new Error("Bu kullanıcıya ait şirket kaydı bulunamadı.");
-
-  // Cookie'deki şirketi doğrula; geçersizse ilk şirketi al
-  const cookieMatch = cookieSirketId
-    ? sirketler.find((s) => s.sirket_id === cookieSirketId)
-    : undefined;
-  const ks = cookieMatch ?? sirketler[0];
-
-  return {
-    supabase,
-    user,
-    sirketId: ks.sirket_id,
-    rol: ks.rol,
-  };
-}
+import { getAuthContext } from "@/lib/auth/context";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Ayarlar getir (aylık çalışma saati vb.)

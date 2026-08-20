@@ -48,6 +48,7 @@ import { ExcelExportButton } from "@/components/ui/ExcelExportButton";
 import { useTopluProjePuantajGirisi } from "@/hooks/usePuantaj";
 import { PdfOnizleButton } from "@/components/ui/PdfOnizleButton";
 import { projePuantajPdfOnizle } from "@/lib/pdf/puantajPdf";
+import { yevmiyeCizelgesiPdfOnizle } from "@/lib/pdf/yevmiyeCizelgesiPdf";
 import { projePuantajExport } from "@/lib/excel/puantajExport";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -357,6 +358,24 @@ export function ProjePuantajView() {
                 projeAdi: seciliProje.ad,
                 yil,
                 ay,
+              })
+            }
+          />
+        )}
+
+        {/* Yevmiye Çizelgesi Şablon PDF (Test Butonu) */}
+        {seciliProje && !isLoading && personeller.length > 0 && (
+          <PdfOnizleButton
+            id="btn-proje-puantaj-yevmiye-pdf"
+            label="Yevmiye Çizelgesi (PDF Test)"
+            baslik={`${AY_ADLARI[ay]} ${yil} Yevmiye Çizelgesi`}
+            dosyaAdi={`Yevmiye_Cizelgesi_${seciliProje.ad.replace(/\s+/g, '_')}_${yil}_${String(ay).padStart(2, '0')}`}
+            onOlustur={() =>
+              yevmiyeCizelgesiPdfOnizle({
+                yil,
+                ay,
+                projeAdi: seciliProje.ad,
+                satirlar: satirlar as never,
               })
             }
           />

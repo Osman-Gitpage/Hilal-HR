@@ -2,16 +2,32 @@
 
 import { createClient } from "@/supabase/server";
 import { redirect } from "next/navigation";
+import {
+  loginSchema,
+  kayitSchema,
+  sifreSifirlaSchema,
+  sifreGuncelleSchema,
+  profilGuncelleSchema,
+} from "@/lib/validations/auth";
 
 export async function login(
   _prevState: { hata?: string } | undefined,
   formData: FormData
 ) {
-  const supabase = await createClient();
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
+  const parsed = loginSchema.safeParse({
+    email: formData.get("email"),
+    password: formData.get("password"),
+  });
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (!parsed.success) {
+    return { hata: parsed.error.issues[0]?.message ?? "Geçersiz giriş bilgileri." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword({
+    email: parsed.data.email,
+    password: parsed.data.password,
+  });
 
   if (error) {
     return { hata: "E-posta veya şifre hatalı." };
@@ -24,16 +40,22 @@ export async function kayitOl(
   _prevState: { hata?: string; basarili?: string } | undefined,
   formData: FormData
 ) {
-  const supabase = await createClient();
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-  const adSoyad = formData.get("adSoyad") as string;
+  const parsed = kayitSchema.safeParse({
+    adSoyad: formData.get("adSoyad"),
+    email: formData.get("email"),
+    password: formData.get("password"),
+  });
 
+  if (!parsed.success) {
+    return { hata: parsed.error.issues[0]?.message ?? "Geçersiz kayıt bilgileri." };
+  }
+
+  const supabase = await createClient();
   const { error } = await supabase.auth.signUp({
-    email,
-    password,
+    email: parsed.data.email,
+    password: parsed.data.password,
     options: {
-      data: { ad_soyad: adSoyad },
+      data: { ad_soyad: parsed.data.adSoyad },
     },
   });
 
@@ -54,11 +76,16 @@ export async function sifreSifirla(
   _prevState: { hata?: string; basarili?: boolean } | undefined,
   formData: FormData
 ): Promise<{ hata?: string; basarili?: boolean }> {
-  const supabase = await createClient();
-  const email = (formData.get("email") as string)?.trim();
-  if (!email) return { hata: "E-posta adresi gereklidir." };
+  const parsed = sifreSifirlaSchema.safeParse({
+    email: formData.get("email"),
+  });
 
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+  if (!parsed.success) {
+    return { hata: parsed.error.issues[0]?.message ?? "Geçersiz e-posta adresi." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
     redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/sifre-guncelle`,
   });
 
@@ -70,11 +97,16 @@ export async function sifreGuncelle(
   _prevState: { hata?: string; basarili?: boolean } | undefined,
   formData: FormData
 ): Promise<{ hata?: string; basarili?: boolean }> {
-  const supabase = await createClient();
-  const password = (formData.get("password") as string)?.trim();
-  if (!password || password.length < 8) return { hata: "Şifre en az 8 karakter olmalıdır." };
+  const parsed = sifreGuncelleSchema.safeParse({
+    password: formData.get("password"),
+  });
 
-  const { error } = await supabase.auth.updateUser({ password });
+  if (!parsed.success) {
+    return { hata: parsed.error.issues[0]?.message ?? "Şifre en az 8 karakter olmalıdır." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
   if (error) return { hata: error.message };
   return { basarili: true };
 }
@@ -83,12 +115,17 @@ export async function profilGuncelle(
   _prevState: { hata?: string; basarili?: boolean } | undefined,
   formData: FormData
 ): Promise<{ hata?: string; basarili?: boolean }> {
-  const supabase = await createClient();
-  const adSoyad = (formData.get("ad_soyad") as string)?.trim();
-  if (!adSoyad) return { hata: "Ad Soyad boş olamaz." };
+  const parsed = profilGuncelleSchema.safeParse({
+    ad_soyad: formData.get("ad_soyad"),
+  });
 
+  if (!parsed.success) {
+    return { hata: parsed.error.issues[0]?.message ?? "Geçersiz ad soyad." };
+  }
+
+  const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({
-    data: { ad_soyad: adSoyad },
+    data: { ad_soyad: parsed.data.ad_soyad },
   });
   if (error) return { hata: error.message };
   return { basarili: true };

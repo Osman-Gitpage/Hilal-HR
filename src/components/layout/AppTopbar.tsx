@@ -40,14 +40,18 @@ export function AppTopbar({ user, sirketler }: AppTopbarProps) {
   const [sirketDegisiyor, setSirketDegisiyor] = useState(false);
   const router = useRouter();
 
-  // İlk yüklemede aktif şirketi store'a ve cookie'ye yaz
+  // İlk yüklemede veya aktif şirket geçersizse doğrulayıp senkronize et
   useEffect(() => {
     if (sirketler.length === 0) return;
-    const sirket = ilkSirket(sirketler[0]);
-    if (!sirket) return;
-    if (aktifSirketId === sirket.id) return;
-    setAktifSirket(sirket);
-    sirketAyarla(sirket.id);
+    const mevcutKs = sirketler.find((k) => ilkSirket(k)?.id === aktifSirketId);
+    const hedefSirket = mevcutKs ? ilkSirket(mevcutKs) : ilkSirket(sirketler[0]);
+
+    if (!hedefSirket) return;
+
+    if (aktifSirketId !== hedefSirket.id) {
+      setAktifSirket(hedefSirket);
+      sirketAyarla(hedefSirket.id);
+    }
   }, [sirketler, aktifSirketId, setAktifSirket]);
 
   const adSoyad = user.user_metadata?.ad_soyad ?? user.email ?? "Kullanıcı";

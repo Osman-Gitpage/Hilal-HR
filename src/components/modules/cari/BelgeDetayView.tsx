@@ -39,7 +39,7 @@ import {
   useOdemeSil,
   useBelgeNotlarGuncelle,
 } from "@/hooks/useCari";
-import { paraFormat, tarihFormat, odemeYontemEtiket, odemeYontemBadgeClass } from "@/lib/cari";
+import { paraFormat, formatKur, tarihFormat, odemeYontemEtiket, odemeYontemBadgeClass } from "@/lib/cari";
 import type { BelgeTur, OdemeDurumu, Odeme } from "@/types/cari";
 import { OdemeEkleModal } from "./OdemeEkleModal";
 import { BelgeDosyaPanel } from "./BelgeDosyaPanel";
@@ -404,7 +404,7 @@ export function BelgeDetayView({ belgeId }: { belgeId: string }) {
               </p>
               {belge.kur !== 1 && (
                 <p className="text-sm text-muted-foreground tabular-nums pt-1">
-                  × {belge.kur.toFixed(4)} kur ={" "}
+                  × {formatKur(belge.kur)} kur ={" "}
                   <strong className="text-foreground">{paraFormat(tlTutari, "TRY")}</strong>
                 </p>
               )}

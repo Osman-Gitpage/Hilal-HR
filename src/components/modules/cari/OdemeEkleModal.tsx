@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 
 import { useOdemeEkle } from "@/hooks/useCari";
-import { bugunYYYYMMDD } from "@/lib/cari";
+import { bugunYYYYMMDD, paraFormat, formatKur } from "@/lib/cari";
 import type { ParaBirimi, OdemeYontem, OdemePayload } from "@/types/cari";
 
 interface OdemeEkleModalProps {
@@ -158,14 +158,25 @@ export function OdemeEkleModal({
               <Input
                 id="odeme-kur"
                 type="number"
-                min="0.0001"
-                step="0.0001"
+                min="0.0000000001"
+                step="any"
+                placeholder="1.0000"
                 value={kur}
                 onChange={(e) => setKur(e.target.value)}
                 className="h-9 text-sm text-right tabular-nums"
               />
             </div>
           </div>
+
+          {/* TL Karşılığı Önizleme */}
+          {paraBirimi !== "TRY" && parseFloat(tutar) > 0 && parseFloat(kur) > 0 && (
+            <div className="px-3 py-2 rounded-lg bg-primary/5 border border-primary/15 flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">İşlem TL Karşılığı:</span>
+              <span className="font-bold text-primary tabular-nums">
+                {paraFormat(parseFloat(tutar) * (parseFloat(kur) || 1), "TRY")}
+              </span>
+            </div>
+          )}
 
           {/* Açıklama */}
           <div className="space-y-1.5">

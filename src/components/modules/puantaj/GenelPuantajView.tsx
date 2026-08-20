@@ -44,9 +44,10 @@ import { Input } from "@/components/ui/input";
 import { GunVeriGirisiModal } from "./GunVeriGirisiModal";
 import { TopluGunGirisiPanel } from "./TopluGunGirisiPanel";
 import { ExcelExportButton } from "@/components/ui/ExcelExportButton";
-import { puantajExport } from "@/lib/excel/puantajExport";
+import { puantajExport, topluPuantajExport } from "@/lib/excel/puantajExport";
 import { PdfOnizleButton } from "@/components/ui/PdfOnizleButton";
-import { puantajPdfOnizle } from "@/lib/pdf/puantajPdf";
+import { puantajPdfOnizle, topluPuantajPdfOnizle } from "@/lib/pdf/puantajPdf";
+import { topluPuantajVerisiGetir } from "@/app/actions/puantaj";
 
 // ─────────────────────────────────────────────
 // Sabitler
@@ -518,6 +519,30 @@ export function GenelPuantajView() {
                   ay,
                 })
               }
+            />
+          )}
+          {/* Toplu Excel Export */}
+          {!isLoading && personeller.length > 0 && (
+            <ExcelExportButton
+              id="btn-toplu-excel"
+              label="Toplu Excel"
+              onExport={async () => {
+                const veri = await topluPuantajVerisiGetir(yil, ay);
+                topluPuantajExport(veri);
+              }}
+            />
+          )}
+          {/* Toplu PDF Önizle */}
+          {!isLoading && personeller.length > 0 && (
+            <PdfOnizleButton
+              id="btn-toplu-pdf"
+              label="Toplu PDF"
+              baslik={`${AY_ADLARI[ay]} ${yil} Toplu Puantaj Raporu`}
+              dosyaAdi={`Toplu_Puantaj_${yil}_${String(ay).padStart(2, '0')}`}
+              onOlustur={async () => {
+                const veri = await topluPuantajVerisiGetir(yil, ay);
+                return topluPuantajPdfOnizle(veri);
+              }}
             />
           )}
         </div>

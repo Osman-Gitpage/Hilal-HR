@@ -1,12 +1,14 @@
 /**
  * src/lib/excel/puantajExport.ts
  *
- * Puantaj tablosu Excel export.
+ * Puantaj tablosu Excel export (Genel, Proje ve Toplu Çıktı).
  * Özellikler:
  *   - Personel x Gün grid tablosu
  *   - Özel durum kodları (YI, RT, RP...) hücreye yazılır
- *   - Sütun sonunda: Toplam Çalışma, Mesai, SGK Gün, Maaş Saati
- *   - Sayfanın altında Legend tablosu (kod: açıklama)
+ *   - Ek Mesai sütunları dahil geliştirilmiş özet sütunları
+ *   - 2. Sheet olarak Personel Günlük Notları ekleme
+ *   - Profesyonel kolon hizalama, genişlikler ve başlık dondurma
+ *   - Toplu XLSX çıktısı (Genel + Tüm Projeler tek dosyada)
  */
 
 import * as XLSX from "xlsx";
@@ -44,6 +46,34 @@ export interface PuantajExportVeri {
   personeller: Personel[];
   puantajlar: (HucreDurumu & { personel_id: string; tarih: string })[];
   ozetler?: OzetItem[];
+  yil: number;
+  ay: number;
+}
+
+export interface ProjePuantajSatirExport {
+  personel_id: string;
+  tarih: string;
+  saat: number | null;
+  mesai_saati?: number | null;
+  ozel_durum?: string | null;
+  aciklama?: string | null;
+  personel?: { id: string; ad: string; soyad: string };
+}
+
+export interface ProjePuantajExportVeri {
+  personeller: Personel[];
+  satirlar: ProjePuantajSatirExport[];
+  projeAdi: string;
+  yil: number;
+  ay: number;
+}
+
+export interface TopluPuantajExportVeri {
+  personeller: Personel[];
+  puantajlar: (HucreDurumu & { personel_id: string; tarih: string })[];
+  ozetler?: OzetItem[];
+  projeler: { id: string; ad: string; firma_adi?: string | null }[];
+  projePuantajlar: (ProjePuantajSatirExport & { proje_id: string })[];
   yil: number;
   ay: number;
 }
@@ -89,7 +119,6 @@ function gunHucreDegeri(veri?: HucreDurumu): string | number {
   return "";
 }
 
-
 function hesaplaToplam(
   personelId: string,
   puantajlar: PuantajExportVeri["puantajlar"]
@@ -119,11 +148,67 @@ function hesaplaToplam(
   return { calisma, mesai, sgkGun };
 }
 
+function formatTarihTR(tarihStr: string): string {
+  const parts = tarihStr.split("-");
+  if (parts.length !== 3) return tarihStr;
+  return `${parts[2]}.${parts[1]}.${parts[0]}`;
+}
+
 // ─────────────────────────────────────────────
-// Ana Export Fonksiyonu
+// Notlar Sheet Oluşturucu
 // ─────────────────────────────────────────────
 
-export function puantajExport(veri: PuantajExportVeri): void {
+interface NotSatiri {
+  tarih: string;
+  personelAd: string;
+  unvan: string;
+  projeAdi?: string;
+  durum: string;
+  aciklama: string;
+}
+
+function olusturNotlarSheet(notlar: NotSatiri[], baslikMetni: string): XLSX.WorkSheet | null {
+  if (!notlar || notlar.length === 0) return null;
+
+  const hasProje = notlar.some((n) => !!n.projeAdi);
+
+  const basliklar = hasProje
+    ? ["Tarih", "Personel", "Unvan", "Proje", "Durum / Çalışma", "Günlük Not / Açıklama"]
+    : ["Tarih", "Personel", "Unvan", "Durum / Çalışma", "Günlük Not / Açıklama"];
+
+  const satirlar = notlar.map((n) => {
+    return hasProje
+      ? [formatTarihTR(n.tarih), n.personelAd, n.unvan, n.projeAdi ?? "-", n.durum, n.aciklama]
+      : [formatTarihTR(n.tarih), n.personelAd, n.unvan, n.durum, n.aciklama];
+  });
+
+  const wsData = [
+    [baslikMetni],
+    [],
+    basliklar,
+    ...satirlar,
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  ws["!cols"] = hasProje
+    ? [{ wch: 12 }, { wch: 22 }, { wch: 18 }, { wch: 22 }, { wch: 16 }, { wch: 50 }]
+    : [{ wch: 12 }, { wch: 22 }, { wch: 18 }, { wch: 16 }, { wch: 50 }];
+
+  ws["!freeze"] = { xSplit: 0, ySplit: 3 };
+
+  return ws;
+}
+
+// ─────────────────────────────────────────────
+// Genel Puantaj Sheet Oluşturucu Helper
+// ─────────────────────────────────────────────
+
+function olusturGenelPuantajSheet(veri: PuantajExportVeri): {
+  ws: XLSX.WorkSheet;
+  notlarSheet: XLSX.WorkSheet | null;
+  donem: string;
+} {
   const { personeller, puantajlar, ozetler = [], yil, ay } = veri;
   const donem = `${AY_ADLARI_EXCEL[ay]} ${yil}`;
 
@@ -132,22 +217,40 @@ export function puantajExport(veri: PuantajExportVeri): void {
   const gunler = Array.from({ length: sonGun }, (_, i) => {
     const gun = i + 1;
     const tarihStr = `${yil}-${String(ay).padStart(2, "0")}-${String(gun).padStart(2, "0")}`;
-    const haftaGunu = new Date(yil, ay - 1, gun).getDay(); // 0=Paz
+    const haftaGunu = new Date(yil, ay - 1, gun).getDay();
     return { gun, tarihStr, haftaGunu };
   });
 
   // Puantaj haritası
   const puantajMap = new Map<string, Map<string, HucreDurumu>>();
+  const notlar: NotSatiri[] = [];
+
+  const personelMap = new Map<string, Personel>();
+  for (const p of personeller) personelMap.set(p.id, p);
+
   for (const p of puantajlar) {
     if (!puantajMap.has(p.personel_id)) puantajMap.set(p.personel_id, new Map());
     puantajMap.get(p.personel_id)!.set(p.tarih, p as HucreDurumu);
+
+    if (p.aciklama && p.aciklama.trim()) {
+      const pers = personelMap.get(p.personel_id);
+      if (pers) {
+        notlar.push({
+          tarih: p.tarih,
+          personelAd: `${pers.ad} ${pers.soyad}`,
+          unvan: pers.gorev_unvan ?? "-",
+          durum: String(gunHucreDegeri(p) || "-"),
+          aciklama: p.aciklama.trim(),
+        });
+      }
+    }
   }
 
   // Özet haritası
   const ozetMap = new Map<string, OzetItem>();
   for (const o of ozetler) ozetMap.set(o.personel_id, o);
 
-  // ── Başlık satırı ──
+  // Başlık satırı
   const gunBasliklari = gunler.map(({ gun, haftaGunu }) => {
     const gunAdlari = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
     return `${gun}\n${gunAdlari[haftaGunu]}`;
@@ -159,11 +262,12 @@ export function puantajExport(veri: PuantajExportVeri): void {
     ...gunBasliklari,
     "Toplam Çalışma",
     "Mesai",
+    "Ek Mesai",
     "SGK Gün",
     "Maaş Saati",
   ];
 
-  // ── Veri satırları ──
+  // Veri satırları
   const satirlar: (string | number)[][] = personeller.map((p) => {
     const adSoyad = `${p.ad} ${p.soyad}`;
     const unvan = p.gorev_unvan ?? "-";
@@ -181,11 +285,20 @@ export function puantajExport(veri: PuantajExportVeri): void {
     const ekMesai = ozet?.mesai_saati_override ?? 0;
     const toplamMesai = mesai + ekMesai;
 
-    return [adSoyad, unvan, ...gunDegerleri, calisma, toplamMesai, sgkGunSon, maasSaatiSon];
+    return [
+      adSoyad,
+      unvan,
+      ...gunDegerleri,
+      calisma,
+      toplamMesai,
+      ekMesai > 0 ? ekMesai : "-",
+      sgkGunSon,
+      maasSaatiSon,
+    ];
   });
 
-  // ── Legend satırları ──
-  const legendBaslik = ["KOD", "AÇIKLAMA", "SAAT", "MESSAİ"];
+  // Legend
+  const legendBaslik = ["KOD", "AÇIKLAMA", "SAAT", "MESAİ"];
   const legendSatirlar = Object.entries(OZEL_DURUMLAR).map(([, oz]) => [
     oz.kod,
     oz.label,
@@ -193,9 +306,7 @@ export function puantajExport(veri: PuantajExportVeri): void {
     oz.mesai > 0 ? `+${oz.mesai} saat mesai` : "-",
   ]);
 
-  // ── Sheet oluştur ──
   const wsData: (string | number)[][] = [
-    // Dönem başlığı
     [`${donem} Puantaj Tablosu`],
     [],
     basliklar,
@@ -208,52 +319,42 @@ export function puantajExport(veri: PuantajExportVeri): void {
 
   const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-  // Sütun genişlikleri
-  const cols = [
-    { wch: 22 }, // Ad Soyad
+  ws["!cols"] = [
+    { wch: 24 }, // Ad Soyad
     { wch: 18 }, // Unvan
-    ...gunler.map(() => ({ wch: 5 })), // Günler
-    { wch: 14 }, // Toplam
-    { wch: 8 },  // Mesai
+    ...gunler.map(() => ({ wch: 5.5 })), // Günler
+    { wch: 14 }, // Toplam Çalışma
+    { wch: 9 },  // Mesai
+    { wch: 10 }, // Ek Mesai
     { wch: 9 },  // SGK Gün
     { wch: 11 }, // Maaş Saati
   ];
-  ws["!cols"] = cols;
-
-  // Başlık satırını dondur (satır 3 = index 2 = başlıklar)
   ws["!freeze"] = { xSplit: 2, ySplit: 3 };
 
-  const wb = yeniWorkbook();
-  XLSX.utils.book_append_sheet(wb, ws, donem.slice(0, 31));
-  workbookIndir(wb, `Puantaj_${yil}_${String(ay).padStart(2, "0")}`);
+  const notlarSheet = olusturNotlarSheet(notlar, `${donem} Genel Puantaj - Personel Günlük Notları`);
+
+  return { ws, notlarSheet, donem };
 }
 
 // ─────────────────────────────────────────────
-// Proje Bazlı Puantaj Export
+// Proje Puantaj Sheet Oluşturucu Helper
 // ─────────────────────────────────────────────
 
-export interface ProjePuantajSatirExport {
-  personel_id: string;
-  tarih: string;
-  saat: number | null;
-  mesai_saati?: number | null;
-  ozel_durum?: string | null;
-  aciklama?: string | null;
-}
-
-export interface ProjePuantajExportVeri {
-  personeller: Personel[];
-  satirlar: ProjePuantajSatirExport[];
-  projeAdi: string;
-  yil: number;
-  ay: number;
-}
-
-export function projePuantajExport(veri: ProjePuantajExportVeri): void {
-  const { personeller, satirlar, projeAdi, yil, ay } = veri;
+function olusturProjePuantajSheet(
+  veri: ProjePuantajExportVeri,
+  personelListesi?: Personel[]
+): {
+  ws: XLSX.WorkSheet;
+  notlarSheet: XLSX.WorkSheet | null;
+  safeProje: string;
+  donem: string;
+} {
+  const { satirlar, projeAdi, yil, ay } = veri;
+  const personeller = veri.personeller && veri.personeller.length > 0
+    ? veri.personeller
+    : (personelListesi ?? []);
   const donem = `${AY_ADLARI_EXCEL[ay]} ${yil}`;
 
-  // Ayın günleri
   const sonGun = new Date(yil, ay, 0).getDate();
   const gunler = Array.from({ length: sonGun }, (_, i) => {
     const gun = i + 1;
@@ -262,19 +363,44 @@ export function projePuantajExport(veri: ProjePuantajExportVeri): void {
     return { gun, tarihStr, haftaGunu };
   });
 
-  // Veri haritası
   const veriMap = new Map<string, Map<string, ProjePuantajSatirExport>>();
+  const notlar: NotSatiri[] = [];
+
+  const personelMap = new Map<string, Personel>();
+  for (const p of personeller) personelMap.set(p.id, p);
+
   for (const s of satirlar) {
     if (!veriMap.has(s.personel_id)) veriMap.set(s.personel_id, new Map());
     veriMap.get(s.personel_id)!.set(s.tarih, s);
+
+    if (s.aciklama && s.aciklama.trim()) {
+      const pers = personelMap.get(s.personel_id) ?? s.personel;
+      const persAd = pers ? `${pers.ad} ${pers.soyad}` : "Bilinmiyor";
+      const unvan = (pers as any)?.gorev_unvan ?? "-";
+
+      let durumStr = "-";
+      if (s.ozel_durum) {
+        const oz = OZEL_DURUMLAR[s.ozel_durum as keyof typeof OZEL_DURUMLAR];
+        durumStr = oz?.kod ?? s.ozel_durum;
+      } else if (s.saat != null) {
+        durumStr = `${s.saat}s`;
+      }
+
+      notlar.push({
+        tarih: s.tarih,
+        personelAd: persAd,
+        unvan,
+        projeAdi,
+        durum: durumStr,
+        aciklama: s.aciklama.trim(),
+      });
+    }
   }
 
-  // Başlık satırları
   const gunAdlari = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
   const gunBasliklari = gunler.map(({ gun, haftaGunu }) => `${gun}\n${gunAdlari[haftaGunu]}`);
-  const basliklar = ["Ad Soyad", "Unvan", ...gunBasliklari, "Toplam (s)"];
+  const basliklar = ["Ad Soyad", "Unvan", ...gunBasliklari, "Toplam (s)", "Mesai (s)"];
 
-  // Veri satırları
   const wsData: (string | number)[][] = [
     [`${projeAdi} — ${donem} Proje Puantajı`],
     [],
@@ -282,7 +408,8 @@ export function projePuantajExport(veri: ProjePuantajExportVeri): void {
     ...personeller.map((p) => {
       const adSoyad = `${p.ad} ${p.soyad}`;
       const unvan = p.gorev_unvan ?? "-";
-      let toplam = 0;
+      let toplamCalisma = 0;
+      let toplamMesai = 0;
 
       const gunDegerleri = gunler.map(({ tarihStr }) => {
         const satir = veriMap.get(p.id)?.get(tarihStr);
@@ -290,33 +417,40 @@ export function projePuantajExport(veri: ProjePuantajExportVeri): void {
 
         if (satir.ozel_durum) {
           const oz = OZEL_DURUMLAR[satir.ozel_durum as keyof typeof OZEL_DURUMLAR];
-          // PM gibi saat=0, mesai>0 → fiili mesai saatini yaz
           if (oz && oz.saat === 0 && oz.mesai > 0) {
             const fiili = sayi(satir.mesai_saati ?? 0) > 0
               ? sayi(satir.mesai_saati!)
               : oz.mesai;
-            toplam += fiili;
+            toplamMesai += fiili;
             return fiili;
           }
           const kod = oz?.kod ?? satir.ozel_durum;
           const mesai = sayi(satir.mesai_saati ?? 0);
+          if (mesai > 0) toplamMesai += mesai;
           return mesai > 0 ? `${kod}+${mesai}` : kod;
         }
 
         if (satir.saat != null && satir.saat > 0) {
           const mesai = sayi(satir.mesai_saati ?? 0);
-          toplam += satir.saat + mesai;
+          toplamCalisma += satir.saat;
+          if (mesai > 0) toplamMesai += mesai;
           return mesai > 0 ? `${satir.saat}+${mesai}` : satir.saat;
         }
 
         return "-";
       });
 
-      return [adSoyad, unvan, ...gunDegerleri, toplam > 0 ? toplam : "-"];
+      return [
+        adSoyad,
+        unvan,
+        ...gunDegerleri,
+        toplamCalisma > 0 ? toplamCalisma : "-",
+        toplamMesai > 0 ? toplamMesai : "-",
+      ];
     }),
     [],
     ["─── LEGEND ───"],
-    ["KOD", "AÇIKLAMA", "SAAT", "MESSAİ"],
+    ["KOD", "AÇIKLAMA", "SAAT", "MESAİ"],
     ...Object.entries(OZEL_DURUMLAR).map(([, oz]) => [
       oz.kod,
       oz.label,
@@ -327,17 +461,106 @@ export function projePuantajExport(veri: ProjePuantajExportVeri): void {
 
   const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-  // Sütun genişlikleri
   ws["!cols"] = [
-    { wch: 22 },
+    { wch: 24 },
     { wch: 18 },
-    ...gunler.map(() => ({ wch: 5 })),
+    ...gunler.map(() => ({ wch: 5.5 })),
     { wch: 12 },
+    { wch: 10 },
   ];
   ws["!freeze"] = { xSplit: 2, ySplit: 3 };
 
-  const wb = yeniWorkbook();
+  const notlarSheet = olusturNotlarSheet(notlar, `${projeAdi} — ${donem} Proje Günlük Notları`);
   const safeProje = projeAdi.replace(/[\\/:*?"<>|]/g, "_").slice(0, 20);
+
+  return { ws, notlarSheet, safeProje, donem };
+}
+
+// ─────────────────────────────────────────────
+// Eksport Fonksiyonları (Tekli & Toplu)
+// ─────────────────────────────────────────────
+
+/**
+ * Genel Puantaj Excel Export
+ */
+export function puantajExport(veri: PuantajExportVeri): void {
+  const { ws, notlarSheet, donem } = olusturGenelPuantajSheet(veri);
+  const wb = yeniWorkbook();
+
+  XLSX.utils.book_append_sheet(wb, ws, donem.slice(0, 31));
+  if (notlarSheet) {
+    XLSX.utils.book_append_sheet(wb, notlarSheet, "Günlük Notlar");
+  }
+
+  workbookIndir(wb, `Puantaj_${veri.yil}_${String(veri.ay).padStart(2, "0")}`);
+}
+
+/**
+ * Proje Puantaj Excel Export
+ */
+export function projePuantajExport(veri: ProjePuantajExportVeri): void {
+  const { ws, notlarSheet, safeProje, donem } = olusturProjePuantajSheet(veri);
+  const wb = yeniWorkbook();
+
   XLSX.utils.book_append_sheet(wb, ws, `${safeProje} ${donem}`.slice(0, 31));
-  workbookIndir(wb, `ProjePuantaj_${safeProje}_${yil}_${String(ay).padStart(2, "0")}`);
+  if (notlarSheet) {
+    XLSX.utils.book_append_sheet(wb, notlarSheet, "Günlük Notlar");
+  }
+
+  workbookIndir(wb, `ProjePuantaj_${safeProje}_${veri.yil}_${String(veri.ay).padStart(2, "0")}`);
+}
+
+/**
+ * Toplu Puantaj Excel Export (Genel + Tüm Aktif Projeler)
+ */
+export function topluPuantajExport(veri: TopluPuantajExportVeri): void {
+  const { personeller, puantajlar, ozetler, projeler, projePuantajlar, yil, ay } = veri;
+  const wb = yeniWorkbook();
+
+  // 1. Genel Puantaj Sheet & Notlar
+  const genelVeri: PuantajExportVeri = { personeller, puantajlar, ozetler, yil, ay };
+  const { ws: wsGenel, notlarSheet: wsGenelNotlar } = olusturGenelPuantajSheet(genelVeri);
+
+  XLSX.utils.book_append_sheet(wb, wsGenel, "Genel Puantaj");
+  if (wsGenelNotlar) {
+    XLSX.utils.book_append_sheet(wb, wsGenelNotlar, "Genel Notlar");
+  }
+
+  // 2. Her bir proje için Puantaj Sheet & Notlar
+  for (const proje of projeler) {
+    const pSatirlar = projePuantajlar.filter((p) => p.proje_id === proje.id);
+    const projeVeri: ProjePuantajExportVeri = {
+      personeller,
+      satirlar: pSatirlar,
+      projeAdi: proje.ad,
+      yil,
+      ay,
+    };
+
+    const { ws: wsProje, notlarSheet: wsProjeNotlar, safeProje } = olusturProjePuantajSheet(projeVeri);
+
+    // Sheet isminin 31 karakteri aşmaması için güvenli isim
+    const sheetName = safeProje.slice(0, 25);
+    let finalSheetName = sheetName;
+    let counter = 1;
+    while (wb.SheetNames.includes(finalSheetName)) {
+      finalSheetName = `${sheetName}_${counter}`;
+      counter++;
+    }
+
+    XLSX.utils.book_append_sheet(wb, wsProje, finalSheetName);
+
+    if (wsProjeNotlar) {
+      let notlarSheetName = `${finalSheetName} Not`;
+      if (notlarSheetName.length > 31) notlarSheetName = notlarSheetName.slice(0, 31);
+      let nCounter = 1;
+      while (wb.SheetNames.includes(notlarSheetName)) {
+        notlarSheetName = `${notlarSheetName.slice(0, 28)}_${nCounter}`;
+        nCounter++;
+      }
+      XLSX.utils.book_append_sheet(wb, wsProjeNotlar, notlarSheetName);
+    }
+  }
+
+  workbookIndir(wb, `Toplu_Puantaj_${yil}_${String(ay).padStart(2, "0")}`);
 }

@@ -210,6 +210,11 @@ export function PersonelFormView({
                   defaultValue={personel?.ad}
                   placeholder="Mehmet"
                   required
+                  maxLength={50}
+                  onInput={(e) => {
+                    // Sayı, emoji ve özel sembolleri engelle
+                    e.currentTarget.value = e.currentTarget.value.replace(/[^a-zA-ZçÇğĞıİöÖşŞüÜ\s'-]/g, "");
+                  }}
                   disabled={isPending}
                   className="rounded-xl h-10 border-zinc-200 dark:border-zinc-700 text-sm focus-visible:ring-indigo-500"
                 />
@@ -224,6 +229,11 @@ export function PersonelFormView({
                   defaultValue={personel?.soyad}
                   placeholder="Yılmaz"
                   required
+                  maxLength={50}
+                  onInput={(e) => {
+                    // Sayı, emoji ve özel sembolleri engelle
+                    e.currentTarget.value = e.currentTarget.value.replace(/[^a-zA-ZçÇğĞıİöÖşŞüÜ\s'-]/g, "");
+                  }}
                   disabled={isPending}
                   className="rounded-xl h-10 border-zinc-200 dark:border-zinc-700 text-sm focus-visible:ring-indigo-500"
                 />
@@ -242,6 +252,10 @@ export function PersonelFormView({
                     defaultValue={personel?.tc}
                     placeholder="12345678901"
                     maxLength={11}
+                    inputMode="numeric"
+                    onInput={(e) => {
+                      e.currentTarget.value = e.currentTarget.value.replace(/\D/g, "").slice(0, 11);
+                    }}
                     required
                     disabled={isPending}
                     className="rounded-xl h-10 border-zinc-200 dark:border-zinc-700 text-sm pl-9 focus-visible:ring-indigo-500 font-mono tracking-wider"
@@ -252,12 +266,13 @@ export function PersonelFormView({
 
               <div className="space-y-1.5 sm:col-span-1">
                 <Label htmlFor="form-dogum-tarihi" className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                  Doğum Tarihi
+                  Doğum Tarihi (14 - 95 Yaş)
                 </Label>
                 <Input
                   id="form-dogum-tarihi"
                   name="dogum_tarihi"
                   type="date"
+                  max={new Date().toISOString().split("T")[0]}
                   defaultValue={personel?.dogum_tarihi ?? ""}
                   disabled={isPending}
                   className="rounded-xl h-10 border-zinc-200 dark:border-zinc-700 text-sm focus-visible:ring-indigo-500"

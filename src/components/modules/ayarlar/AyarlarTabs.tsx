@@ -4,8 +4,9 @@
 
 import type { ReactNode } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Settings, FolderTree } from "lucide-react";
+import { Settings, FolderTree, FileCode } from "lucide-react";
 import { EvrakKategoriAyarlar } from "./EvrakKategoriAyarlar";
+import { AyarlarSablonlarView } from "./AyarlarSablonlarView";
 
 interface AyarlarTabsProps {
   genelAyarlar: ReactNode;
@@ -30,6 +31,13 @@ export function AyarlarTabs({ genelAyarlar }: AyarlarTabsProps) {
             <FolderTree className="h-4 w-4" />
             Evrak Kategorileri
           </TabsTrigger>
+          <TabsTrigger
+            value="sablonlar"
+            className="flex items-center gap-2 pb-3 pt-1 px-1 rounded-none border-b-2 border-transparent data-[state=active]:border-[#7c3aed] data-[state=active]:text-[#7c3aed] data-[state=active]:bg-transparent text-xs sm:text-sm font-semibold text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-all cursor-pointer"
+          >
+            <FileCode className="h-4 w-4" />
+            Özel Evrak Şablonları
+          </TabsTrigger>
         </TabsList>
       </div>
 
@@ -39,6 +47,10 @@ export function AyarlarTabs({ genelAyarlar }: AyarlarTabsProps) {
 
       <TabsContent value="evrak" className="mt-0 focus-visible:outline-none">
         <EvrakKategoriAyarlar />
+      </TabsContent>
+
+      <TabsContent value="sablonlar" className="mt-0 focus-visible:outline-none">
+        <AyarlarSablonlarView />
       </TabsContent>
     </Tabs>
   );

@@ -5,6 +5,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useState, useEffect, type ReactNode } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import { SystemNotificationListener } from "@/components/layout/SystemNotificationListener";
 
 export function Providers({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -56,6 +57,7 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <SystemNotificationListener />
       <TooltipProvider>{children}</TooltipProvider>
       <Toaster position="bottom-right" richColors closeButton />
       <ReactQueryDevtools initialIsOpen={false} />

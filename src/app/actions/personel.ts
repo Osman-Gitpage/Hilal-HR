@@ -7,31 +7,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PersonelInsert, PersonelUpdate } from "@/supabase/app-types";
 import { tcKimlikDogrula } from "@/lib/utils/index";
-
-
-// ─────────────────────────────────────────────
-// Yardımcı: Aktif kullanıcı + aktif şirket
-// ─────────────────────────────────────────────
-async function getAuthContext() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/giris");
-
-  const { data: ks, error: ksError } = await supabase
-    .from("kullanici_sirket")
-    .select("sirket_id")
-    .eq("kullanici_id", user.id)
-    .limit(1)
-    .maybeSingle();
-
-  if (ksError) throw new Error(`Şirket sorgusu başarısız: ${ksError.message}`);
-  if (!ks) throw new Error("Bu kullanıcıya ait şirket kaydı bulunamadı. Lütfen yöneticinize başvurun.");
-
-  return { supabase, user, sirketId: (ks as any).sirket_id as string };
-}
+import { getAuthContext } from "@/lib/auth/context";
 
 // ─────────────────────────────────────────────
 // Personel Listesi
@@ -111,40 +87,72 @@ export async function maasGecmisiniGetir(personelId: string) {
 }
 
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
 // Personel Ekle
 // ─────────────────────────────────────────────
+import {
+  personelEkleSchema,
+  personelGuncelleSchema,
+} from "@/lib/validations/personel";
+
 export async function personelEkle(formData: FormData) {
   const { supabase, sirketId } = await getAuthContext();
 
-  const ad = formData.get("ad") as string;
-  const soyad = formData.get("soyad") as string;
-  const tc = formData.get("tc") as string;
-  const ise_baslama = formData.get("ise_baslama_tarihi") as string;
-  const maas_net = Number(formData.get("maas_net"));
+  const rawData = {
+    ad: formData.get("ad"),
+    soyad: formData.get("soyad"),
+    tc: formData.get("tc"),
+    dogum_tarihi: formData.get("dogum_tarihi") || undefined,
+    cinsiyet: formData.get("cinsiyet") || undefined,
+    ise_baslama_tarihi: formData.get("ise_baslama_tarihi"),
+    maas_net: formData.get("maas_net"),
+    sgk_sicil: formData.get("sgk_sicil") || undefined,
+    gorev_unvan: formData.get("gorev_unvan") || undefined,
+    telefon: formData.get("telefon") || undefined,
+    email: formData.get("email") || undefined,
+    adres: formData.get("adres") || undefined,
+    banka_adi: formData.get("banka_adi") || undefined,
+    sube_kodu: formData.get("sube_kodu") || undefined,
+    hesap_no: formData.get("hesap_no") || undefined,
+    iban: formData.get("iban") || undefined,
+    ise_baslama_nedeni: formData.get("ise_baslama_nedeni") || undefined,
+  };
 
-  if (!ad || !soyad || !tc || !ise_baslama || !maas_net) {
-    return { hata: "Zorunlu alanlar eksik" };
+  const parsed = personelEkleSchema.safeParse(rawData);
+  if (!parsed.success) {
+    return { hata: parsed.error.issues[0]?.message ?? "Geçersiz form verisi" };
   }
 
-  const tcHata = tcKimlikDogrula(tc);
-  if (tcHata) return { hata: tcHata };
+  const data = parsed.data;
+
+  // Şirket içi mükerrer TC kontrolü
+  const { data: existingTc } = await supabase
+    .from("personel")
+    .select("id")
+    .eq("sirket_id", sirketId)
+    .eq("tc", data.tc)
+    .maybeSingle();
+
+  if (existingTc) {
+    return { hata: "Bu TC Kimlik Numarası ile kayıtlı bir çalışan zaten mevcut." };
+  }
 
   const personelVeri: PersonelInsert = {
     sirket_id: sirketId,
-    ad: ad.trim(),
-    soyad: soyad.trim(),
-    tc: tc.trim(),
-    dogum_tarihi: (formData.get("dogum_tarihi") as string) || null,
-    cinsiyet: (formData.get("cinsiyet") as "erkek" | "kadin") || null,
-    sgk_sicil: (formData.get("sgk_sicil") as string) || null,
-    gorev_unvan: (formData.get("gorev_unvan") as string) || null,
-    telefon: (formData.get("telefon") as string) || null,
-    email: (formData.get("email") as string) || null,
-    adres: (formData.get("adres") as string) || null,
-    banka_adi: (formData.get("banka_adi") as string) || null,
-    sube_kodu: (formData.get("sube_kodu") as string) || null,
-    hesap_no: (formData.get("hesap_no") as string) || null,
-    iban: (formData.get("iban") as string) || null,
+    ad: data.ad,
+    soyad: data.soyad,
+    tc: data.tc,
+    dogum_tarihi: data.dogum_tarihi || null,
+    cinsiyet: data.cinsiyet || null,
+    sgk_sicil: data.sgk_sicil || null,
+    gorev_unvan: data.gorev_unvan || null,
+    telefon: data.telefon || null,
+    email: data.email || null,
+    adres: data.adres || null,
+    banka_adi: data.banka_adi || null,
+    sube_kodu: data.sube_kodu || null,
+    hesap_no: data.hesap_no || null,
+    iban: data.iban || null,
   };
 
   // Personel kaydı
@@ -164,9 +172,9 @@ export async function personelEkle(formData: FormData) {
   const epRes = await supabase.from("employment_periods").insert({
     personel_id: yeniPersonelId,
     sirket_id: sirketId,
-    baslangic_tarihi: ise_baslama,
+    baslangic_tarihi: data.ise_baslama_tarihi,
     bitis_tarihi: null,
-    ise_baslama_nedeni: (formData.get("ise_baslama_nedeni") as string) || null,
+    ise_baslama_nedeni: data.ise_baslama_nedeni || null,
   } as any);
 
   if (epRes.error) {
@@ -178,8 +186,8 @@ export async function personelEkle(formData: FormData) {
   const maasRes = await supabase.from("maas_gecmisi").insert({
     personel_id: yeniPersonelId,
     sirket_id: sirketId,
-    maas_net,
-    gecerlilik_baslangic: ise_baslama,
+    maas_net: data.maas_net,
+    gecerlilik_baslangic: data.ise_baslama_tarihi,
     gecerlilik_bitis: null,
   } as any);
 
@@ -200,38 +208,59 @@ export async function personelGuncelle(
 ) {
   const { supabase, sirketId } = await getAuthContext();
 
-  const yeniMaasNet = Number(formData.get("maas_net"));
+  const rawData = {
+    ad: formData.get("ad"),
+    soyad: formData.get("soyad"),
+    tc: formData.get("tc"),
+    dogum_tarihi: formData.get("dogum_tarihi") || undefined,
+    cinsiyet: formData.get("cinsiyet") || undefined,
+    maas_net: formData.get("maas_net") ? formData.get("maas_net") : undefined,
+    sgk_sicil: formData.get("sgk_sicil") || undefined,
+    gorev_unvan: formData.get("gorev_unvan") || undefined,
+    telefon: formData.get("telefon") || undefined,
+    email: formData.get("email") || undefined,
+    adres: formData.get("adres") || undefined,
+    banka_adi: formData.get("banka_adi") || undefined,
+    sube_kodu: formData.get("sube_kodu") || undefined,
+    hesap_no: formData.get("hesap_no") || undefined,
+    iban: formData.get("iban") || undefined,
+  };
 
-  // En güncel maaş kaydını bul
-  const { data: maasRows } = await supabase
-    .from("maas_gecmisi")
-    .select("id, maas_net")
-    .eq("personel_id", personelId)
+  const parsed = personelGuncelleSchema.safeParse(rawData);
+  if (!parsed.success) {
+    return { hata: parsed.error.issues[0]?.message ?? "Geçersiz form verisi" };
+  }
+
+  const data = parsed.data;
+
+  // Başka bir personelde aynı TC var mı kontrolü
+  const { data: existingTc } = await supabase
+    .from("personel")
+    .select("id")
     .eq("sirket_id", sirketId)
-    .order("gecerlilik_baslangic", { ascending: false })
-    .limit(1);
+    .eq("tc", data.tc)
+    .neq("id", personelId)
+    .maybeSingle();
 
-  const mevcutMaas = maasRows?.[0] ?? null;
-
-  const tc = (formData.get("tc") as string)?.trim();
-  const tcHata = tcKimlikDogrula(tc);
-  if (tcHata) return { hata: tcHata };
+  if (existingTc) {
+    return { hata: "Bu TC Kimlik Numarası başka bir çalışan kaydında mevcut." };
+  }
 
   const updateVeri: PersonelUpdate = {
-    ad: (formData.get("ad") as string).trim(),
-    soyad: (formData.get("soyad") as string).trim(),
-    tc: (formData.get("tc") as string).trim(),
-    dogum_tarihi: (formData.get("dogum_tarihi") as string) || null,
-    cinsiyet: (formData.get("cinsiyet") as "erkek" | "kadin") || null,
-    sgk_sicil: (formData.get("sgk_sicil") as string) || null,
-    gorev_unvan: (formData.get("gorev_unvan") as string) || null,
-    telefon: (formData.get("telefon") as string) || null,
-    email: (formData.get("email") as string) || null,
-    adres: (formData.get("adres") as string) || null,
-    banka_adi: (formData.get("banka_adi") as string) || null,
-    sube_kodu: (formData.get("sube_kodu") as string) || null,
-    hesap_no: (formData.get("hesap_no") as string) || null,
-    iban: (formData.get("iban") as string) || null,
+    ad: data.ad,
+    soyad: data.soyad,
+    tc: data.tc,
+    dogum_tarihi: data.dogum_tarihi || null,
+    cinsiyet: data.cinsiyet || null,
+    sgk_sicil: data.sgk_sicil || null,
+    gorev_unvan: data.gorev_unvan || null,
+    telefon: data.telefon || null,
+    email: data.email || null,
+    adres: data.adres || null,
+    banka_adi: data.banka_adi || null,
+    sube_kodu: data.sube_kodu || null,
+    hesap_no: data.hesap_no || null,
+    iban: data.iban || null,
     updated_at: new Date().toISOString(),
   };
 
@@ -244,25 +273,35 @@ export async function personelGuncelle(
   if (updateRes.error) return { hata: updateRes.error.message };
 
   // Maaş girildiyse veya değiştiyse yeni kayıt
-  if (yeniMaasNet > 0 && (!mevcutMaas || mevcutMaas.maas_net !== yeniMaasNet)) {
-    const bugun = new Date().toISOString().split("T")[0];
-
-    // Önceki tüm açık maaş kayıtlarını kapat
-    await supabase
+  if (data.maas_net && data.maas_net > 0) {
+    const { data: maasRows } = await supabase
       .from("maas_gecmisi")
-      .update({ gecerlilik_bitis: bugun })
+      .select("id, maas_net")
       .eq("personel_id", personelId)
       .eq("sirket_id", sirketId)
-      .is("gecerlilik_bitis", null);
+      .order("gecerlilik_baslangic", { ascending: false })
+      .limit(1);
 
-    // Yeni maaş kaydı oluştur
-    await supabase.from("maas_gecmisi").insert({
-      personel_id: personelId,
-      sirket_id: sirketId,
-      maas_net: yeniMaasNet,
-      gecerlilik_baslangic: bugun,
-      gecerlilik_bitis: null,
-    } as any);
+    const mevcutMaas = maasRows?.[0] ?? null;
+
+    if (!mevcutMaas || Number(mevcutMaas.maas_net) !== data.maas_net) {
+      const bugun = new Date().toISOString().split("T")[0];
+
+      await supabase
+        .from("maas_gecmisi")
+        .update({ gecerlilik_bitis: bugun })
+        .eq("personel_id", personelId)
+        .eq("sirket_id", sirketId)
+        .is("gecerlilik_bitis", null);
+
+      await supabase.from("maas_gecmisi").insert({
+        personel_id: personelId,
+        sirket_id: sirketId,
+        maas_net: data.maas_net,
+        gecerlilik_baslangic: bugun,
+        gecerlilik_bitis: null,
+      } as any);
+    }
   }
 
   revalidatePath("/personel");

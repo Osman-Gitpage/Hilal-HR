@@ -29,7 +29,7 @@ import {
   useBelgeGuncelle,
   useFirmaList,
 } from "@/hooks/useCari";
-import { belgeNoOner, bugunYYYYMMDD, paraFormat } from "@/lib/cari";
+import { belgeNoOner, bugunYYYYMMDD, paraFormat, formatKur } from "@/lib/cari";
 import { sonrakiBelgeNoGetir } from "@/app/actions/cari";
 import type { BelgeTur, ParaBirimi, BelgePayload } from "@/types/cari";
 
@@ -419,13 +419,14 @@ export function BelgeFormView({ belgeId }: BelgeFormViewProps) {
             </FormAlani>
 
             {/* Kur */}
-            <FormAlani label="Kur" hint="(TL karşılığı)">
+            <FormAlani label="Kur" hint="(TL)">
               <div className="relative">
                 <RefreshCw className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   type="number"
-                  min="0.0001"
-                  step="0.0001"
+                  min="0.0000000001"
+                  step="any"
+                  placeholder="1.0000"
                   value={kur}
                   onChange={(e) => setKur(e.target.value)}
                   disabled={paraBirimi === "TRY"}
@@ -433,6 +434,33 @@ export function BelgeFormView({ belgeId }: BelgeFormViewProps) {
                 />
               </div>
             </FormAlani>
+
+            {/* TL Karşılığı (Doğrudan girilebilir) */}
+            {paraBirimi !== "TRY" && (
+              <FormAlani label="Toplam TL Karşılığı" hint="(Hedef TL)">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">
+                    ₺
+                  </span>
+                  <Input
+                    type="number"
+                    min="0.01"
+                    step="any"
+                    placeholder="93200.00"
+                    value={tutarNum > 0 && kurNum > 0 ? (tutarNum * kurNum).toFixed(2) : ""}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value.replace(",", "."));
+                      if (val > 0 && tutarNum > 0) {
+                        // Kuru 10 ondalık hassasiyetle otomatik hesapla
+                        const hesaplananKur = (val / tutarNum).toFixed(10).replace(/0+$/, "").replace(/\.$/, "");
+                        setKur(hesaplananKur);
+                      }
+                    }}
+                    className="h-9 text-sm text-right tabular-nums pl-7 bg-primary/5 font-medium border-primary/20"
+                  />
+                </div>
+              </FormAlani>
+            )}
           </div>
 
           {/* TL Karşılığı özet */}
@@ -440,7 +468,7 @@ export function BelgeFormView({ belgeId }: BelgeFormViewProps) {
             <div className="px-5 py-3 flex items-center justify-between bg-primary/5 border-t border-primary/10">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Info className="h-3.5 w-3.5" />
-                <span>TL karşılığı</span>
+                <span>Net TL Tutarı</span>
               </div>
               <div className="text-right">
                 <span className="text-sm font-bold text-primary tabular-nums">
@@ -448,7 +476,7 @@ export function BelgeFormView({ belgeId }: BelgeFormViewProps) {
                 </span>
                 {paraBirimi !== "TRY" && (
                   <span className="text-xs text-muted-foreground ml-2">
-                    ({paraFormat(tutarNum, paraBirimi)} × {kurNum})
+                    ({paraFormat(tutarNum, paraBirimi)} × {formatKur(kurNum)})
                   </span>
                 )}
               </div>

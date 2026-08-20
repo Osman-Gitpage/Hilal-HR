@@ -6,34 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { VARSAYILAN_AYLIK_CALISMA_SAATI, VARSAYILAN_GUNLUK_CALISMA_SAATI } from "@/lib/constants";
 
-// ─────────────────────────────────────────────
-// Yardımcı: Aktif kullanıcı + aktif şirket
-// ─────────────────────────────────────────────
-async function getAuthContext() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/giris");
-
-  const { data: ks, error: ksError } = await supabase
-    .from("kullanici_sirket")
-    .select("sirket_id, rol")
-    .eq("kullanici_id", user.id)
-    .limit(1)
-    .maybeSingle();
-
-  if (ksError) throw new Error(`Şirket sorgusu başarısız: ${ksError.message}`);
-  if (!ks) throw new Error("Bu kullanıcıya ait şirket kaydı bulunamadı.");
-
-  return {
-    supabase,
-    user,
-    sirketId: (ks as any).sirket_id as string,
-    rol: (ks as any).rol as string,
-  };
-}
+import { getAuthContext } from "@/lib/auth/context";
 
 // ─────────────────────────────────────────────
 // Ayarları getir (yoksa varsayılanları döndür)

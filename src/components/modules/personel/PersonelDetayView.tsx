@@ -42,6 +42,7 @@ import {
   ShieldCheck,
   FileX,
   TrendingUp,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -83,6 +84,11 @@ import { DosyaGoruntule } from "@/components/ui/DosyaGoruntule";
 import { personelCikisYap, personelYenidenIseAl } from "@/app/actions/personel";
 import { formatTarih, formatPara, formatAdSoyad, maskTc } from "@/lib/utils/index";
 import { QUERY_KEYS } from "@/lib/constants";
+import {
+  PersonelEvrakFormDialog,
+  type SablonTipi,
+} from "@/components/modules/personel/PersonelEvrakFormDialog";
+import { PersonelPuantajTab } from "@/components/modules/personel/PersonelPuantajTab";
 
 // ─────────────────────────────────────────────
 // Dialog: Yeniden İşe Al
@@ -367,14 +373,21 @@ function MicroDocThumbnail({ type }: { type: string }) {
 function EvrakKontrolReal({
   personelId,
   aktifDonemId,
+  personel,
 }: {
   personelId: string;
   aktifDonemId: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  personel?: Record<string, any>;
 }) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [yukleDialogAcik, setYukleDialogAcik] = useState(false);
   const [seciliKategori, setSeciliKategori] = useState<EvrakKategori | null>(null);
+
+  // Şablon Form Dialog State
+  const [formDialogAcik, setFormDialogAcik] = useState(false);
+  const [formSablonTip, setFormSablonTip] = useState<SablonTipi>("gorevlendirme");
 
   // Preview, download, and delete states
   const [onizlemeUrl, setOnizlemeUrl] = useState<string | null>(null);
@@ -653,6 +666,57 @@ function EvrakKontrolReal({
           <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-900/50 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0">
             <AlertTriangle className="w-5 h-5" />
           </div>
+        </div>
+      </div>
+
+      {/* ── Şablon İle Hızlı Belge Üret & İndir Barı ── */}
+      <div className="p-4 bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-blue-500/10 dark:from-purple-950/40 dark:to-indigo-950/40 border border-purple-200/80 dark:border-purple-800/60 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+        <div>
+          <h4 className="text-xs font-bold text-zinc-900 dark:text-white flex items-center gap-1.5">
+            <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            Şablon İle Hızlı Belge Üret & İndir
+          </h4>
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+            Personel verileri pre-fill dolar. Dilediğiniz değişkenleri düzenleyip doğrudan indirebilirsiniz (Arşive kaydolmaz).
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs bg-white dark:bg-zinc-900 border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950 text-purple-700 dark:text-purple-300 font-medium shadow-2xs cursor-pointer"
+            onClick={() => {
+              setFormSablonTip("gorevlendirme");
+              setFormDialogAcik(true);
+            }}
+          >
+            <FileText className="w-3.5 h-3.5 mr-1 text-purple-500" />
+            Görevlendirme
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs bg-white dark:bg-zinc-900 border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950 text-purple-700 dark:text-purple-300 font-medium shadow-2xs cursor-pointer"
+            onClick={() => {
+              setFormSablonTip("kkd_zimmet");
+              setFormDialogAcik(true);
+            }}
+          >
+            <ShieldCheck className="w-3.5 h-3.5 mr-1 text-indigo-500" />
+            KKD Zimmet
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs bg-white dark:bg-zinc-900 border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950 text-purple-700 dark:text-purple-300 font-medium shadow-2xs cursor-pointer"
+            onClick={() => {
+              setFormSablonTip("izin_formu");
+              setFormDialogAcik(true);
+            }}
+          >
+            <Calendar className="w-3.5 h-3.5 mr-1 text-blue-500" />
+            İzin Formu
+          </Button>
         </div>
       </div>
 
@@ -954,6 +1018,14 @@ function EvrakKontrolReal({
         personelId={personelId}
         kategori={seciliKategori}
         donemId={aktifDonemId ?? undefined}
+      />
+
+      {/* Şablon İle Belge Doldur & İndir Dialog (Anında İndirir, DB'ye Kayıt Yapmaz) */}
+      <PersonelEvrakFormDialog
+        acik={formDialogAcik}
+        onKapat={() => setFormDialogAcik(false)}
+        sablonTip={formSablonTip}
+        personel={personel ?? { id: personelId }}
       />
 
       {/* Dosya Görüntüle Modal */}
@@ -1652,22 +1724,16 @@ export function PersonelDetayView({ personelId }: { personelId: string }) {
             <EvrakKontrolReal
               personelId={personelId}
               aktifDonemId={aktifDonemId}
+              personel={personel}
             />
           )}
 
           {/* ── TAB 5: Puantaj Listesi ── */}
           {activeTab === "puantaj" && (
-            <div className="space-y-4 text-xs">
-              <h2 className="text-base font-bold text-zinc-900 dark:text-white">
-                Puantaj Listesi
-              </h2>
-              <div className="p-8 text-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl space-y-2">
-                <ClipboardList className="w-8 h-8 text-zinc-300 mx-auto" />
-                <p className="text-zinc-500 font-medium">
-                  Puantaj kayıtları yakında kullanıma açılacak.
-                </p>
-              </div>
-            </div>
+            <PersonelPuantajTab
+              personelId={personelId}
+              personel={personel}
+            />
           )}
         </div>
       </div>

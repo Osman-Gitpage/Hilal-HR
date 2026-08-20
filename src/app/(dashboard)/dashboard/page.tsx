@@ -1,29 +1,41 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { createClient } from "@/supabase/server";
-import { DashboardCharts } from "@/components/dashboard/DashboardCharts";
-import { OnboardingChecklist } from "@/components/dashboard/OnboardingChecklist";
+import { getAuthContext } from "@/lib/auth/context";
 import {
   Users,
   Banknote,
-  Clock,
-  FolderOpen,
-  TrendingUp,
-  ChevronRight,
+  Receipt,
+  FolderGit2,
   Plus,
-  FileText,
+  FilePlus2,
+  CalendarCheck,
+  Clock,
+  ArrowUpRight,
+  CheckCircle2,
+  AlertCircle,
+  Building2,
   Calendar,
-  AlertTriangle,
 } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Dashboard — Hilal Office",
-  description: "Hilal Office yönetim paneli ana sayfası",
+  title: "Genel Bakış — Hilal Office",
+  description: "Hilal Office sade ve iş odaklı yönetim paneli",
 };
 
 const AY_ADLARI = [
-  "", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
-  "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık",
+  "",
+  "Ocak",
+  "Şubat",
+  "Mart",
+  "Nisan",
+  "Mayıs",
+  "Haziran",
+  "Temmuz",
+  "Ağustos",
+  "Eylül",
+  "Ekim",
+  "Kasım",
+  "Aralık",
 ];
 
 function formatPara(n: number, currency: string = "TRY") {
@@ -34,13 +46,18 @@ function formatPara(n: number, currency: string = "TRY") {
   }).format(n);
 }
 
-function formatTarih(d: Date) {
-  return d.toLocaleDateString("tr-TR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+function formatTarih(isoDate?: string | null) {
+  if (!isoDate) return "-";
+  try {
+    const d = new Date(isoDate);
+    return d.toLocaleDateString("tr-TR", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return isoDate;
+  }
 }
 
 function unifyToTRY(amount: number, currency: string) {
@@ -52,438 +69,456 @@ function unifyToTRY(amount: number, currency: string) {
   return amount * (rates[currency] ?? 1);
 }
 
-const MODULLER = [
-  {
-    baslik: "Personel",
-    aciklama: "Personel kayıtları, işe giriş/çıkış ve bilgi yönetimi",
-    href: "/personel",
-    gradyan: "from-blue-500/10 to-blue-600/5 dark:from-blue-500/20 dark:to-blue-600/10",
-    ikon: "👥",
-    aktif: true,
-  },
-  {
-    baslik: "Maaş Bordrosu",
-    aciklama: "Aylık bordro girişi, hesaplama ve banka ödeme takibi",
-    href: "/bordro",
-    gradyan: "from-emerald-500/10 to-emerald-600/5 dark:from-emerald-500/20 dark:to-emerald-600/10",
-    ikon: "💰",
-    aktif: true,
-  },
-  {
-    baslik: "Puantaj",
-    aciklama: "Günlük çalışma takibi, proje bazlı saat girişi",
-    href: "/puantaj",
-    gradyan: "from-violet-500/10 to-violet-600/5 dark:from-violet-500/20 dark:to-violet-600/10",
-    ikon: "📅",
-    aktif: true,
-  },
-  {
-    baslik: "Cari / Fatura",
-    aciklama: "Cari hesap ve fatura yönetimi",
-    href: "/cari",
-    gradyan: "from-purple-500/10 to-purple-600/5 dark:from-purple-500/20 dark:to-purple-600/10",
-    ikon: "🧾",
-    aktif: true,
-  },
-  {
-    baslik: "Evrak Yönetimi",
-    aciklama: "Personel özlük dosyaları, şirket evrakları ve tersane şablonları",
-    href: "/evrak",
-    gradyan: "from-rose-500/10 to-rose-600/5 dark:from-rose-500/20 dark:to-rose-600/10",
-    ikon: "📁",
-    aktif: true,
-  },
-  {
-    baslik: "Zimmet",
-    aciklama: "Personel zimmet takibi ve devir işlemleri",
-    href: "#",
-    gradyan: "from-amber-500/10 to-amber-600/5 dark:from-amber-500/20 dark:to-amber-600/10",
-    ikon: "📋",
-    aktif: false,
-  },
-  {
-    baslik: "Ayarlar",
-    aciklama: "Şirket ayarları, çalışma saatleri ve tatil takvimi",
-    href: "/ayarlar",
-    gradyan: "from-slate-500/10 to-slate-600/5 dark:from-slate-500/20 dark:to-slate-600/10",
-    ikon: "⚙️",
-    aktif: true,
-  },
-];
-
 export default async function DashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const adSoyad =
-    user?.user_metadata?.ad_soyad ?? user?.email ?? "Kullanıcı";
-
-  // Şirket ID bul
-  const { data: ks } = await supabase
-    .from("kullanici_sirket")
-    .select("sirket_id")
-    .eq("kullanici_id", user?.id ?? "")
-    .maybeSingle();
-
-  const sirketId = (ks as any)?.sirket_id as string | undefined;
+  const { supabase, user, sirketId } = await getAuthContext();
 
   const now = new Date();
   const yil = now.getFullYear();
   const ay = now.getMonth() + 1;
 
-  // 1. Paralel KPI + checklist sorguları
-  const [aktifPersonelRes, bordroRes, bekleyenRes, projeRes, toplamPersonelRes, ayarlarRes, toplamBordroRes, evrakYaklasanRes] = await Promise.all([
+  const {
+    data: { user: fullUser },
+  } = await supabase.auth.getUser();
+
+  const adSoyad =
+    (fullUser as any)?.user_metadata?.ad_soyad ||
+    (fullUser as any)?.user_metadata?.full_name ||
+    user?.email?.split("@")[0] ||
+    "Yönetici";
+
+  // Tarih aralıkları
+  const buAyBaslangic = `${yil}-${String(ay).padStart(2, "0")}-01`;
+  const buAySonGun = new Date(yil, ay, 0).getDate();
+  const buAyBitis = `${yil}-${String(ay).padStart(2, "0")}-${String(buAySonGun).padStart(2, "0")}`;
+
+  // Paralel Veri Sorguları
+  const [
+    aktifPersonelRes,
+    buAyGirisRes,
+    bordroBuAyRes,
+    bekleyenBordroRes,
+    buAyBelgelerRes,
+    aktifProjelerRes,
+    sonBelgelerRes,
+    sonPersonellerRes,
+    sonBordrolarRes,
+  ] = await Promise.all([
+    // 1. Aktif Personel Sayısı
     supabase
       .from("employment_periods")
       .select("personel_id", { count: "exact", head: true })
-      .eq("sirket_id", sirketId ?? "")
-      .is("bitis_tarihi", null) as any,
+      .eq("sirket_id", sirketId)
+      .is("bitis_tarihi", null),
 
+    // 2. Bu Ay İşe Başlayanlar
+    supabase
+      .from("employment_periods")
+      .select("personel_id", { count: "exact", head: true })
+      .eq("sirket_id", sirketId)
+      .gte("baslangic_tarihi", buAyBaslangic)
+      .lte("baslangic_tarihi", buAyBitis),
+
+    // 3. Bu Ayki Maaş Bordroları
     supabase
       .from("maas_bordro")
-      .select("toplam_odeme")
-      .eq("sirket_id", sirketId ?? "")
+      .select("toplam_odeme, net_ucret, durum")
+      .eq("sirket_id", sirketId)
       .eq("donem_yil", yil)
-      .eq("donem_ay", ay)
-      .in("durum", ["onaylandi", "kilitlendi"]) as any,
+      .eq("donem_ay", ay),
 
+    // 4. Bekleyen Bordro Onayı Sayısı
     supabase
       .from("maas_bordro")
       .select("id", { count: "exact", head: true })
-      .eq("sirket_id", sirketId ?? "")
-      .eq("durum", "kontrol_bekliyor") as any,
+      .eq("sirket_id", sirketId)
+      .eq("durum", "kontrol_bekliyor"),
 
+    // 5. Bu Ayki Cari Belgeler / Faturalar
+    supabase
+      .from("belge")
+      .select("tutar, kur, para_birimi, tur")
+      .eq("sirket_id", sirketId)
+      .gte("tarih", buAyBaslangic)
+      .lte("tarih", buAyBitis),
+
+    // 6. Aktif Projeler
     supabase
       .from("proje")
-      .select("id", { count: "exact", head: true })
-      .eq("sirket_id", sirketId ?? "")
-      .eq("durum", "aktif") as any,
+      .select("id, ad, kod", { count: "exact" })
+      .eq("sirket_id", sirketId)
+      .eq("durum", "aktif"),
 
-    // Checklist: toplam personel (aktif + çıkmış)
+    // 7. Son Cari Belgeler (7 Kayıt)
     supabase
-      .from("employment_periods")
-      .select("personel_id", { count: "exact", head: true })
-      .eq("sirket_id", sirketId ?? "") as any,
+      .from("belge")
+      .select(`
+        id, belge_no, tur, tutar, para_birimi, tarih,
+        firma:firma_id(ad)
+      `)
+      .eq("sirket_id", sirketId)
+      .order("tarih", { ascending: false })
+      .limit(7),
 
-    // Checklist: ayarlar var mı?
+    // 8. Son Eklenen Personeller (7 Kayıt)
     supabase
-      .from("ayarlar")
-      .select("id", { count: "exact", head: true })
-      .eq("sirket_id", sirketId ?? "") as any,
+      .from("personel")
+      .select(`
+        id, ad, soyad, created_at,
+        unvan:unvan_id(ad),
+        employment_periods(baslangic_tarihi, bitis_tarihi)
+      `)
+      .eq("sirket_id", sirketId)
+      .order("created_at", { ascending: false })
+      .limit(7),
 
-    // Checklist: herhangi bir bordro var mı?
+    // 9. Son Bordro Hareketleri (7 Kayıt)
     supabase
       .from("maas_bordro")
-      .select("id", { count: "exact", head: true })
-      .eq("sirket_id", sirketId ?? "") as any,
-
-    // KPI: Süresi yaklaşan evraklar (30 gün içinde)
-    supabase
-      .from("evrak")
-      .select("id", { count: "exact", head: true })
-      .eq("sirket_id", sirketId ?? "")
-      .eq("durum", "aktif")
-      .lte("bitis_tarihi", new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
-      .gte("bitis_tarihi", new Date().toISOString().split("T")[0]) as any,
+      .select(`
+        id, toplam_odeme, net_ucret, durum, donem_yil, donem_ay, created_at,
+        personel:personel_id(ad, soyad)
+      `)
+      .eq("sirket_id", sirketId)
+      .order("created_at", { ascending: false })
+      .limit(7),
   ]);
 
-  const aktifPersonel: number = aktifPersonelRes.count ?? 0;
-  const toplamBordro: number = ((bordroRes.data ?? []) as { toplam_odeme: number | null }[])
-    .reduce((s, b) => s + (b.toplam_odeme ?? 0), 0);
-  const bekleyenOnay: number = bekleyenRes.count ?? 0;
-  const aktifProje: number = projeRes.count ?? 0;
-  const yaklasanEvrak: number = evrakYaklasanRes.count ?? 0;
+  // KPI Metrikleri
+  const aktifPersonelSayisi = aktifPersonelRes.count ?? 0;
+  const buAyGirisSayisi = buAyGirisRes.count ?? 0;
 
-  // Checklist verileri
-  const herhangiPersonelVar: boolean = (toplamPersonelRes.count ?? 0) > 0;
-  const ayarlarVar: boolean = (ayarlarRes.count ?? 0) > 0;
-  const herhanigBordroVar: boolean = (toplamBordroRes.count ?? 0) > 0;
+  const bordroListesi = bordroBuAyRes.data ?? [];
+  const onayliBordrolar = bordroListesi.filter((b) => b.durum === "onaylandi" || b.durum === "kilitlendi");
+  const toplamBordroTutar = onayliBordrolar.reduce((sum, b) => sum + (b.toplam_odeme ?? 0), 0);
+  const bekleyenBordroSayisi = bekleyenBordroRes.count ?? 0;
 
-  const checklistItems = [
-    {
-      id: "sirket",
-      label: "Şirket kuruldu",
-      desc: "Tamamlandı",
-      done: true,
-    },
-    {
-      id: "ayarlar",
-      label: "Çalışma ayarları yapıldı",
-      desc: "Günlük ve aylık çalışma saatlerini belirleyin",
-      done: ayarlarVar,
-      href: "/ayarlar",
-    },
-    {
-      id: "personel",
-      label: "İlk personel eklendi",
-      desc: "Çalışanlarınızı sisteme kaydedin",
-      done: herhangiPersonelVar,
-      href: "/personel/yeni",
-    },
-    {
-      id: "bordro",
-      label: "İlk bordro hesaplandı",
-      desc: "Aylık bordro işlemlerinizi başlatın",
-      done: herhanigBordroVar,
-      href: "/bordro",
-    },
-  ];
+  const buAyFaturalar = buAyBelgelerRes.data ?? [];
+  const buAyFinansHacmi = buAyFaturalar.reduce((sum, b) => {
+    return sum + unifyToTRY(Number(b.tutar ?? 0) * Number(b.kur ?? 1), b.para_birimi);
+  }, 0);
 
-  const bugun = formatTarih(now);
+  const aktifProjeSayisi = aktifProjelerRes.count ?? 0;
 
-  // 2. Grafikler İçin Tarihçe Sorguları (Son 6 Ay)
-  const last6Months = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    last6Months.push({
-      yil: d.getFullYear(),
-      ay: d.getMonth() + 1,
-      etiket: d.toLocaleDateString("tr-TR", { month: "short" }),
-    });
-  }
+  // Veri Listeleri
+  const sonBelgeler = (sonBelgelerRes.data ?? []).map((b: any) => ({
+    id: b.id,
+    belge_no: b.belge_no || "-",
+    tur: b.tur || "Fatura",
+    tutar: Number(b.tutar ?? 0),
+    para_birimi: b.para_birimi || "TRY",
+    tarih: b.tarih,
+    firma_ad: b.firma?.ad || "-",
+  }));
 
-  // Maaş Bordroları Geçmişi
-  const { data: bordroTarihce } = await supabase
-    .from("maas_bordro")
-    .select("donem_yil, donem_ay, toplam_odeme")
-    .eq("sirket_id", sirketId ?? "")
-    .in("durum", ["onaylandi", "kilitlendi"])
-    .eq("is_active_version", true);
-
-  const payrollData = last6Months.map((m) => {
-    const toplam = (bordroTarihce ?? [])
-      .filter((b) => Number(b.donem_yil) === m.yil && Number(b.donem_ay) === m.ay)
-      .reduce((sum, b) => sum + Number(b.toplam_odeme ?? 0), 0);
+  const sonPersoneller = (sonPersonellerRes.data ?? []).map((p: any) => {
+    const ep = (p.employment_periods ?? []).find((e: any) => e.bitis_tarihi === null);
     return {
-      donem: m.etiket,
-      tutar: toplam,
+      id: p.id,
+      ad: p.ad,
+      soyad: p.soyad,
+      unvan: p.unvan?.ad || "Genel Kadro",
+      ise_giris: ep?.baslangic_tarihi || p.created_at,
     };
   });
 
-  // Cari Gelir/Gider Geçmişi
-  const altinAltiAyDate = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-  const altinAltiAyString = altinAltiAyDate.toISOString().split("T")[0];
-
-  const { data: belgeTarihce } = await supabase
-    .from("belge")
-    .select("tarih, tur, tutar, kur, para_birimi")
-    .eq("sirket_id", sirketId ?? "")
-    .gte("tarih", altinAltiAyString);
-
-  const financeData = last6Months.map((m) => {
-    const filtered = (belgeTarihce ?? []).filter((b) => {
-      if (!b.tarih) return false;
-      const d = new Date(b.tarih);
-      return d.getFullYear() === m.yil && (d.getMonth() + 1) === m.ay;
-    });
-
-    // Yeni şemada gelir/gider ayrımı yok — faturaları gelir, proformaları nötr say
-    const gelir = filtered
-      .filter((b) => b.tur === "fatura" || b.tur === "hesap_bilgisi")
-      .reduce((sum, b) => sum + unifyToTRY(Number(b.tutar ?? 0) * Number(b.kur ?? 1), b.para_birimi), 0);
-
-    const gider = filtered
-      .filter((b) => b.tur === "proforma")
-      .reduce((sum, b) => sum + unifyToTRY(Number(b.tutar ?? 0) * Number(b.kur ?? 1), b.para_birimi), 0);
-
-    return {
-      donem: m.etiket,
-      gelir,
-      gider,
-    };
-  });
-
-
-
-  const KPI_KARTLARI = [
-    {
-      baslik: "Aktif Çalışan",
-      deger: aktifPersonel.toString(),
-      alt: `${aktifPersonel > 0 ? "+1 bu ay" : "aktif çalışan"}`,
-      ikon: Users,
-      renk: "text-blue-600 dark:text-blue-400 border-blue-500/20 bg-blue-500/[0.02]",
-      bg: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-    },
-    {
-      baslik: `${AY_ADLARI[ay]} Maaş Gideri`,
-      deger: formatPara(toplamBordro),
-      alt: "onaylı toplam ödeme",
-      ikon: Banknote,
-      renk: "text-emerald-600 dark:text-emerald-400 border-emerald-500/20 bg-emerald-500/[0.02]",
-      bg: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-    },
-    {
-      baslik: "Bekleyen Onay",
-      deger: bekleyenOnay.toString(),
-      alt: `${bekleyenOnay > 0 ? "onay bekleyen bordro var" : "hepsi onaylı"}`,
-      ikon: Clock,
-      renk: "text-amber-600 dark:text-amber-400 border-amber-500/20 bg-amber-500/[0.02]",
-      bg: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-    },
-    {
-      baslik: "Aktif Projeler",
-      deger: aktifProje.toString(),
-      alt: "devam eden çalışma",
-      ikon: FolderOpen,
-      renk: "text-violet-600 dark:text-violet-400 border-violet-500/20 bg-violet-500/[0.02]",
-      bg: "bg-violet-600/10 text-violet-600 dark:text-violet-400",
-    },
-    {
-      baslik: "Yaklaşan Evrak",
-      deger: yaklasanEvrak.toString(),
-      alt: `${yaklasanEvrak > 0 ? "süresi dolacak evrak" : "tüm evraklar güncel"}`,
-      ikon: AlertTriangle,
-      renk: "text-rose-600 dark:text-rose-400 border-rose-500/20 bg-rose-500/[0.02]",
-      bg: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
-    },
-  ];
+  const sonBordrolar = (sonBordrolarRes.data ?? []).map((b: any) => ({
+    id: b.id,
+    personel_ad: b.personel ? `${b.personel.ad} ${b.personel.soyad}` : "-",
+    donem: `${AY_ADLARI[b.donem_ay] || b.donem_ay} ${b.donem_yil}`,
+    toplam_odeme: Number(b.toplam_odeme ?? b.net_ucret ?? 0),
+    durum: b.durum || "taslak",
+  }));
 
   return (
-    <div className="space-y-8 pb-10">
-      {/* ── Başlangıç Rehberi Checklist ── */}
-      <OnboardingChecklist items={checklistItems} sirketId={sirketId ?? ""} />
-
-      {/* ── Üst Başlık & Hızlı İşlemler ── */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 pb-2">
+    <div className="space-y-6 pb-12">
+      {/* ── ÜST BAŞLIK & HIZLI EYLEMLER ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border/60">
         <div>
-          <p className="text-xs text-muted-foreground font-medium mb-1.5 flex items-center gap-1.5">
-            <TrendingUp className="h-3.5 w-3.5 text-primary" />
-            {bugun}
-          </p>
-          <h1 className="text-3xl font-extrabold tracking-tight">
-            Hoş geldiniz,{" "}
-            <span className="bg-gradient-to-r from-primary via-primary/80 to-primary/60 bg-clip-text text-transparent">
-              {adSoyad}
-            </span>{" "}
-            👋
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+            Genel Bakış
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-            Hilal Office & Muhasebe yönetim paneline hoş geldiniz. Şirketinizin güncel finansal ve operasyonel durumunu aşağıdan takip edebilirsiniz.
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {AY_ADLARI[ay]} {yil} dönemi operasyonel ve finansal durum
           </p>
         </div>
 
-        {/* Hızlı İşlemler */}
-        <div className="flex flex-wrap items-center gap-3">
+        {/* Hızlı Butonlar */}
+        <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/personel/yeni"
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 transition-all duration-200 shadow-xs hover:shadow-md hover:-translate-y-0.5"
-            id="quick-add-personel"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-xs"
           >
             <Plus className="h-3.5 w-3.5" />
-            Yeni Personel Ekle
+            Personel Ekle
           </Link>
           <Link
             href="/cari"
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 transition-all duration-200 shadow-xs hover:shadow-md hover:-translate-y-0.5"
-            id="quick-add-invoice"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted hover:bg-muted/80 text-foreground border border-border/70 transition-colors"
           >
-            <FileText className="h-3.5 w-3.5" />
-            Yeni Belge Gir
+            <FilePlus2 className="h-3.5 w-3.5 text-muted-foreground" />
+            Belge Ekle
+          </Link>
+          <Link
+            href="/puantaj"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted hover:bg-muted/80 text-foreground border border-border/70 transition-colors"
+          >
+            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+            Puantaj
           </Link>
           <Link
             href="/bordro"
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-violet-600 hover:bg-violet-500 transition-all duration-200 shadow-xs hover:shadow-md hover:-translate-y-0.5"
-            id="quick-calculate-payroll"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted hover:bg-muted/80 text-foreground border border-border/70 transition-colors"
           >
-            <Calendar className="h-3.5 w-3.5" />
-            Bordro Hesapla
+            <CalendarCheck className="h-3.5 w-3.5 text-muted-foreground" />
+            Bordro Dönemi
           </Link>
         </div>
       </div>
 
-      {/* ── KPI Kartları ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
-        {KPI_KARTLARI.map(({ baslik, deger, alt, ikon: Ikon, renk, bg }) => (
-          <div
-            key={baslik}
-            className={`rounded-2xl border p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 ${renk}`}
-          >
-            <div className="flex items-start justify-between gap-2 mb-3">
-              <p className="text-xs font-semibold text-muted-foreground/80 uppercase tracking-wider leading-tight">
-                {baslik}
-              </p>
-              <div className={`rounded-xl p-2 shrink-0 ${bg}`}>
-                <Ikon className="h-4 w-4" />
-              </div>
-            </div>
-            <p className="text-3xl font-extrabold tracking-tight mb-1">
-              {deger}
-            </p>
-            <p className="text-xs text-muted-foreground/80 font-medium">{alt}</p>
+      {/* ── 4 YENİ VE SADE KPI KARTI ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* 1. Aktif Kadro */}
+        <div className="rounded-xl border border-border/70 bg-card p-4 shadow-xs">
+          <div className="flex items-center justify-between text-muted-foreground mb-2">
+            <span className="text-xs font-medium">Aktif Personel</span>
+            <Users className="h-4 w-4 text-blue-500" />
           </div>
-        ))}
-      </div>
+          <p className="text-2xl font-bold tracking-tight text-foreground">
+            {aktifPersonelSayisi}
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            {buAyGirisSayisi > 0 ? `+${buAyGirisSayisi} bu ay işe giriş` : "Mevcut aktif çalışan"}
+          </p>
+        </div>
 
-      {/* ── Recharts Grafikler ── */}
-      <div className="pt-2">
-        <DashboardCharts payrollData={payrollData} financeData={financeData} />
-      </div>
-
-
-      {/* ── Modüller Kılavuzu ── */}
-      <div>
-        <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">
-          Sistem Modülleri
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {MODULLER.map((modul) => {
-            const isLink = modul.aktif && modul.href !== "#";
-            const cardClass = [
-              "group relative rounded-2xl border bg-card p-6 transition-all duration-300",
-              isLink
-                ? "hover:shadow-lg hover:-translate-y-1 cursor-pointer hover:border-primary/20"
-                : "opacity-55 cursor-default",
-            ].join(" ");
-
-            const content = (
-              <>
-                {/* Sol kenar gradyan vurgusu */}
-                {isLink && (
-                  <div className={`absolute left-0 top-5 bottom-5 w-1 rounded-r-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
-                )}
-
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div
-                    className={`h-11 w-11 rounded-xl bg-gradient-to-br ${modul.gradyan} flex items-center justify-center text-xl shadow-xs group-hover:scale-105 transition-transform duration-300`}
-                  >
-                    {modul.ikon}
-                  </div>
-
-                  {isLink ? (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground/30 group-hover:text-primary group-hover:translate-x-0.5 transition-all mt-1 shrink-0" />
-                  ) : (
-                    <span className="text-[9px] font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full shrink-0 mt-1 border border-border/60">
-                      YAKINDA
-                    </span>
-                  )}
-                </div>
-
-                <p className="font-bold text-sm mb-1 group-hover:text-primary transition-colors duration-200">{modul.baslik}</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {modul.aciklama}
-                </p>
-              </>
-            );
-
-            return isLink ? (
-              <Link
-                key={modul.baslik}
-                href={modul.href}
-                className={cardClass}
-              >
-                {content}
-              </Link>
+        {/* 2. Aylık Maaş Tahakkuku */}
+        <div className="rounded-xl border border-border/70 bg-card p-4 shadow-xs">
+          <div className="flex items-center justify-between text-muted-foreground mb-2">
+            <span className="text-xs font-medium">{AY_ADLARI[ay]} Maaş Gideri</span>
+            <Banknote className="h-4 w-4 text-emerald-500" />
+          </div>
+          <p className="text-2xl font-bold tracking-tight text-foreground">
+            {formatPara(toplamBordroTutar)}
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            {bekleyenBordroSayisi > 0 ? (
+              <span className="text-amber-600 dark:text-amber-400 font-medium">
+                {bekleyenBordroSayisi} bordro onay bekliyor
+              </span>
             ) : (
-              <div
-                key={modul.baslik}
-                className={cardClass}
-              >
-                {content}
+              "Onaylı toplam ödeme"
+            )}
+          </p>
+        </div>
+
+        {/* 3. Bu Ayki Cari Fatura Hacmi */}
+        <div className="rounded-xl border border-border/70 bg-card p-4 shadow-xs">
+          <div className="flex items-center justify-between text-muted-foreground mb-2">
+            <span className="text-xs font-medium">{AY_ADLARI[ay]} Belge / Fatura</span>
+            <Receipt className="h-4 w-4 text-amber-500" />
+          </div>
+          <p className="text-2xl font-bold tracking-tight text-foreground">
+            {formatPara(buAyFinansHacmi)}
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            {buAyFaturalar.length} adet işlem kaydı
+          </p>
+        </div>
+
+        {/* 4. Saha & Projeler */}
+        <div className="rounded-xl border border-border/70 bg-card p-4 shadow-xs">
+          <div className="flex items-center justify-between text-muted-foreground mb-2">
+            <span className="text-xs font-medium">Aktif Projeler</span>
+            <FolderGit2 className="h-4 w-4 text-violet-500" />
+          </div>
+          <p className="text-2xl font-bold tracking-tight text-foreground">
+            {aktifProjeSayisi}
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Devam eden aktif şantiye/proje
+          </p>
+        </div>
+      </div>
+
+      {/* ── ANA VERİ TABLOLARI (2 KOLONLU DÜZEN) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* TABLO 1: Son Cari Belgeler / Faturalar */}
+        <div className="rounded-xl border border-border/70 bg-card overflow-hidden shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="p-4 border-b border-border/60 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">Son Cari Belgeler & Faturalar</h2>
+                <p className="text-[11px] text-muted-foreground mt-0.5">En son girilen fatura ve makbuzlar</p>
               </div>
-            );
-          })}
+              <Link
+                href="/cari"
+                className="text-xs text-primary font-medium hover:underline inline-flex items-center gap-1"
+              >
+                Tümü <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-border/40 bg-muted/30 text-muted-foreground font-medium">
+                    <th className="py-2.5 px-3">Belge No</th>
+                    <th className="py-2.5 px-3">Firma</th>
+                    <th className="py-2.5 px-3">Tür</th>
+                    <th className="py-2.5 px-3">Tarih</th>
+                    <th className="py-2.5 px-3 text-right">Tutar</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/30">
+                  {sonBelgeler.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                        Henüz fatura veya belge kaydı bulunmuyor.
+                      </td>
+                    </tr>
+                  ) : (
+                    sonBelgeler.map((b) => (
+                      <tr key={b.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="py-2.5 px-3 font-medium text-foreground">{b.belge_no}</td>
+                        <td className="py-2.5 px-3 text-muted-foreground truncate max-w-[150px]">
+                          {b.firma_ad}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground uppercase border border-border/50">
+                            {b.tur}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-muted-foreground">{formatTarih(b.tarih)}</td>
+                        <td className="py-2.5 px-3 text-right font-semibold text-foreground">
+                          {formatPara(b.tutar, b.para_birimi)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* TABLO 2: Personel Kadro Listesi */}
+        <div className="rounded-xl border border-border/70 bg-card overflow-hidden shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="p-4 border-b border-border/60 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">Son Personel Kayıtları</h2>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Kadroya en son eklenen çalışanlar</p>
+              </div>
+              <Link
+                href="/personel"
+                className="text-xs text-primary font-medium hover:underline inline-flex items-center gap-1"
+              >
+                Tümü <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-border/40 bg-muted/30 text-muted-foreground font-medium">
+                    <th className="py-2.5 px-3">Ad Soyad</th>
+                    <th className="py-2.5 px-3">Unvan / Görev</th>
+                    <th className="py-2.5 px-3">İşe Giriş</th>
+                    <th className="py-2.5 px-3 text-right">Durum</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/30">
+                  {sonPersoneller.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-muted-foreground">
+                        Henüz kayıtlı personel bulunmuyor.
+                      </td>
+                    </tr>
+                  ) : (
+                    sonPersoneller.map((p) => (
+                      <tr key={p.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="py-2.5 px-3 font-medium text-foreground">
+                          {p.ad} {p.soyad}
+                        </td>
+                        <td className="py-2.5 px-3 text-muted-foreground">{p.unvan}</td>
+                        <td className="py-2.5 px-3 text-muted-foreground">{formatTarih(p.ise_giris)}</td>
+                        <td className="py-2.5 px-3 text-right">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                            Aktif
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── TABLO 3: SON BORDRO HAREKETLERİ ── */}
+      <div className="rounded-xl border border-border/70 bg-card overflow-hidden shadow-xs">
+        <div className="p-4 border-b border-border/60 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Son Bordro İşlemleri</h2>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Sistemdeki son maaş hesaplama ve onay hareketleri</p>
+          </div>
+          <Link
+            href="/bordro"
+            className="text-xs text-primary font-medium hover:underline inline-flex items-center gap-1"
+          >
+            Bordro Yönetimi <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-border/40 bg-muted/30 text-muted-foreground font-medium">
+                <th className="py-2.5 px-3">Personel</th>
+                <th className="py-2.5 px-3">Dönem</th>
+                <th className="py-2.5 px-3">Ödeme Tutarı</th>
+                <th className="py-2.5 px-3 text-right">Onay Durumu</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/30">
+              {sonBordrolar.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-8 text-center text-muted-foreground">
+                    Henüz bordro hareketi bulunmuyor.
+                  </td>
+                </tr>
+              ) : (
+                sonBordrolar.map((b) => (
+                  <tr key={b.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="py-2.5 px-3 font-medium text-foreground">{b.personel_ad}</td>
+                    <td className="py-2.5 px-3 text-muted-foreground">{b.donem}</td>
+                    <td className="py-2.5 px-3 font-semibold text-foreground">
+                      {formatPara(b.toplam_odeme)}
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      {b.durum === "onaylandi" || b.durum === "kilitlendi" ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          <CheckCircle2 className="h-3 w-3" />
+                          Onaylandı
+                        </span>
+                      ) : b.durum === "kontrol_bekliyor" ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                          <Clock className="h-3 w-3" />
+                          Onay Bekliyor
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground border border-border/50">
+                          Taslak
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

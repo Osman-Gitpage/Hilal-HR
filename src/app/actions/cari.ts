@@ -28,24 +28,7 @@ import type {
 
 // ── Yardımcılar ───────────────────────────────────────────────────────────────
 
-/** Aktif şirket ID'sini getirir. */
-async function getSirketId(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: authErr,
-  } = await supabase.auth.getUser();
-  if (authErr || !user) throw new Error("Oturum açık değil.");
-
-  const { data: ks, error: ksErr } = await supabase
-    .from("kullanici_sirket")
-    .select("sirket_id")
-    .eq("kullanici_id", user.id)
-    .maybeSingle();
-
-  if (ksErr || !ks) throw new Error("Şirket bulunamadı.");
-  return ks.sirket_id;
-}
+import { getSirketId } from "@/lib/auth/context";
 
 type ActionResult<T = undefined> =
   | (T extends undefined ? { basarili: true } : { basarili: true; veri: T })
@@ -124,24 +107,40 @@ export async function firmaListesiGetir(): Promise<FirmaListItem[]> {
   });
 }
 
+import {
+  firmaSchema,
+  belgeSchema,
+  odemeSchema,
+} from "@/lib/validations/cari";
+
 /** Yeni firma ekler. */
 export async function firmaEkle(
-  payload: { ad: string; notlar?: string | null }
+  payload: { ad: string; notlar?: string | null; vkn?: string; vergi_dairesi?: string; telefon?: string; email?: string; adres?: string }
 ): Promise<ActionResult<{ id: string }>> {
   try {
+    const parsed = firmaSchema.safeParse(payload);
+    if (!parsed.success) {
+      return { basarili: false, hata: parsed.error.issues[0]?.message ?? "Geçersiz firma bilgileri." };
+    }
+
     const sirketId = await getSirketId();
     const supabase = await createClient();
+    const data = parsed.data;
 
-    const { data, error } = await supabase
+    const { data: inserted, error } = await supabase
       .from("firma")
-      .insert({ sirket_id: sirketId, ad: payload.ad.trim(), notlar: payload.notlar ?? null })
+      .insert({
+        sirket_id: sirketId,
+        ad: data.ad,
+        notlar: data.notlar ?? null,
+      })
       .select("id")
       .single();
 
     if (error) return { basarili: false, hata: error.message };
 
     revalidatePath("/cari/firma");
-    return { basarili: true, veri: { id: data.id } };
+    return { basarili: true, veri: { id: inserted.id } };
   } catch (e) {
     return { basarili: false, hata: String(e) };
   }
@@ -150,15 +149,24 @@ export async function firmaEkle(
 /** Firma günceller. */
 export async function firmaGuncelle(
   id: string,
-  payload: { ad: string; notlar?: string | null }
+  payload: { ad: string; notlar?: string | null; vkn?: string; vergi_dairesi?: string; telefon?: string; email?: string; adres?: string }
 ): Promise<ActionResult> {
   try {
+    const parsed = firmaSchema.safeParse(payload);
+    if (!parsed.success) {
+      return { basarili: false, hata: parsed.error.issues[0]?.message ?? "Geçersiz firma bilgileri." };
+    }
+
     const sirketId = await getSirketId();
     const supabase = await createClient();
+    const data = parsed.data;
 
     const { error } = await supabase
       .from("firma")
-      .update({ ad: payload.ad.trim(), notlar: payload.notlar ?? null })
+      .update({
+        ad: data.ad,
+        notlar: data.notlar ?? null,
+      })
       .eq("id", id)
       .eq("sirket_id", sirketId);
 
@@ -393,23 +401,29 @@ export async function belgeEkle(
   payload: BelgePayload
 ): Promise<ActionResult<{ id: string }>> {
   try {
+    const parsed = belgeSchema.safeParse(payload);
+    if (!parsed.success) {
+      return { basarili: false, hata: parsed.error.issues[0]?.message ?? "Geçersiz belge verisi." };
+    }
+
     const sirketId = await getSirketId();
     const supabase = await createClient();
+    const data = parsed.data;
 
-    const { data, error } = await supabase
+    const { data: inserted, error } = await supabase
       .from("belge")
       .insert({
         sirket_id: sirketId,
-        firma_id: payload.firma_id ?? null,
-        tur: payload.tur,
-        belge_no: payload.belge_no.trim(),
-        tarih: payload.tarih,
-        aciklama: payload.aciklama.trim(),
-        gemi_adi: payload.gemi_adi?.trim() || null,
-        tutar: payload.tutar,
-        para_birimi: payload.para_birimi,
-        kur: payload.kur,
-        notlar: payload.notlar ?? null,
+        firma_id: data.firma_id ?? null,
+        tur: data.tur,
+        belge_no: data.belge_no,
+        tarih: data.tarih,
+        aciklama: data.aciklama,
+        gemi_adi: data.gemi_adi || null,
+        tutar: data.tutar,
+        para_birimi: data.para_birimi,
+        kur: data.kur,
+        notlar: data.notlar ?? null,
       })
       .select("id")
       .single();
@@ -417,7 +431,7 @@ export async function belgeEkle(
     if (error) return { basarili: false, hata: error.message };
 
     revalidatePath("/cari");
-    return { basarili: true, veri: { id: data.id } };
+    return { basarili: true, veri: { id: inserted.id } };
   } catch (e) {
     return { basarili: false, hata: String(e) };
   }
@@ -507,29 +521,35 @@ export async function odemeEkle(
   payload: OdemePayload
 ): Promise<ActionResult<{ id: string }>> {
   try {
+    const parsed = odemeSchema.safeParse(payload);
+    if (!parsed.success) {
+      return { basarili: false, hata: parsed.error.issues[0]?.message ?? "Geçersiz ödeme bilgileri." };
+    }
+
     const sirketId = await getSirketId();
     const supabase = await createClient();
+    const data = parsed.data;
 
-    const { data, error } = await supabase
+    const { data: inserted, error } = await supabase
       .from("odeme")
       .insert({
         sirket_id: sirketId,
-        belge_id: payload.belge_id,
-        tarih: payload.tarih,
-        tutar: payload.tutar,
-        para_birimi: payload.para_birimi,
-        kur: payload.kur,
-        yontem: payload.yontem,
-        aciklama: payload.aciklama ?? null,
+        belge_id: data.belge_id,
+        tarih: data.tarih,
+        tutar: data.tutar,
+        para_birimi: data.para_birimi,
+        kur: data.kur,
+        yontem: data.yontem,
+        aciklama: data.aciklama ?? null,
       })
       .select("id")
       .single();
 
     if (error) return { basarili: false, hata: error.message };
 
-    revalidatePath(`/cari/belge/${payload.belge_id}`);
+    revalidatePath(`/cari/belge/${data.belge_id}`);
     revalidatePath("/cari");
-    return { basarili: true, veri: { id: data.id } };
+    return { basarili: true, veri: { id: inserted.id } };
   } catch (e) {
     return { basarili: false, hata: String(e) };
   }
