@@ -26,7 +26,7 @@ export function isValidTCKN(tc: string): boolean {
 }
 
 export const tcKimlikSchema = z
-  .string({ required_error: "TC Kimlik No zorunludur." })
+  .string({ message: "TC Kimlik No zorunludur." })
   .trim()
   .refine((val) => /^\d{11}$/.test(val), {
     message: "TC Kimlik No 11 haneli sayı olmalıdır.",
@@ -84,7 +84,7 @@ export function isValidIBAN(iban: string): boolean {
   // BigInt ile Modulo 97 kontrolü
   try {
     const num = BigInt(rearranged);
-    return num % 97n === 1n;
+    return num % BigInt(97) === BigInt(1);
   } catch {
     return false;
   }
@@ -215,7 +215,7 @@ export const guvenliMetinSchema = (min = 1, max = 256, zorunlu = true) => {
 // ─── 8. Türkçe İsim / Soyisim (Emoji, Sayı & Özel Sembol Yasak) ─────────────
 export const turkceIsimSchema = (alanAdi: string, min = 2, max = 50) =>
   z
-    .string({ required_error: `${alanAdi} alanı zorunludur.` })
+    .string({ message: `${alanAdi} alanı zorunludur.` })
     .transform((val) => sanitizeHtml(val))
     .refine((val) => val.length >= min, {
       message: `${alanAdi} en az ${min} karakter olmalıdır.`,
@@ -265,7 +265,7 @@ export const dogumTarihiSchema = z
   .transform((val) => val || null);
 
 export const iseBaslamaTarihiSchema = z
-  .string({ required_error: "İşe başlama tarihi zorunludur." })
+  .string({ message: "İşe başlama tarihi zorunludur." })
   .trim()
   .refine(isValidDateString, {
     message: "Geçerli bir işe başlama tarihi giriniz (YYYY-MM-DD).",

@@ -35,12 +35,12 @@ export const puantajHucreSchema = z.object({
   tarih: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Geçerli bir tarih giriniz (YYYY-MM-DD)."),
   kod: z
     .enum(GECERLI_PUANTAJ_KODLARI, {
-      errorMap: () => ({ message: "Geçersiz puantaj kodu." }),
+      message: "Geçersiz puantaj kodu.",
     })
     .nullable()
     .optional(),
   saat: z
-    .number({ invalid_type_error: "Mesai saati sayısal olmalıdır." })
+    .number({ message: "Mesai saati sayısal olmalıdır." })
     .min(0, "Mesai saati negatif olamaz.")
     .max(256, "Fazla mesai en fazla 256 saat olabilir.")
     .default(0),

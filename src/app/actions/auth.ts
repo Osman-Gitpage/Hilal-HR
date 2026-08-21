@@ -15,8 +15,8 @@ export async function login(
   formData: FormData
 ) {
   const parsed = loginSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
+    email: formData.get("email") as string ?? "",
+    password: formData.get("password") as string ?? "",
   });
 
   if (!parsed.success) {
@@ -25,7 +25,7 @@ export async function login(
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({
-    email: parsed.data.email,
+    email: parsed.data.email!,
     password: parsed.data.password,
   });
 
@@ -41,9 +41,9 @@ export async function kayitOl(
   formData: FormData
 ) {
   const parsed = kayitSchema.safeParse({
-    adSoyad: formData.get("adSoyad"),
-    email: formData.get("email"),
-    password: formData.get("password"),
+    adSoyad: formData.get("adSoyad") as string ?? "",
+    email: formData.get("email") as string ?? "",
+    password: formData.get("password") as string ?? "",
   });
 
   if (!parsed.success) {
@@ -52,7 +52,7 @@ export async function kayitOl(
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signUp({
-    email: parsed.data.email,
+    email: parsed.data.email!,
     password: parsed.data.password,
     options: {
       data: { ad_soyad: parsed.data.adSoyad },
@@ -77,7 +77,7 @@ export async function sifreSifirla(
   formData: FormData
 ): Promise<{ hata?: string; basarili?: boolean }> {
   const parsed = sifreSifirlaSchema.safeParse({
-    email: formData.get("email"),
+    email: formData.get("email") as string ?? "",
   });
 
   if (!parsed.success) {
@@ -85,7 +85,7 @@ export async function sifreSifirla(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email!, {
     redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/sifre-guncelle`,
   });
 
@@ -98,7 +98,7 @@ export async function sifreGuncelle(
   formData: FormData
 ): Promise<{ hata?: string; basarili?: boolean }> {
   const parsed = sifreGuncelleSchema.safeParse({
-    password: formData.get("password"),
+    password: formData.get("password") as string ?? "",
   });
 
   if (!parsed.success) {
@@ -116,7 +116,7 @@ export async function profilGuncelle(
   formData: FormData
 ): Promise<{ hata?: string; basarili?: boolean }> {
   const parsed = profilGuncelleSchema.safeParse({
-    ad_soyad: formData.get("ad_soyad"),
+    ad_soyad: formData.get("ad_soyad") as string ?? "",
   });
 
   if (!parsed.success) {

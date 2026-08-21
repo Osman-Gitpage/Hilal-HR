@@ -121,7 +121,7 @@ export default async function DashboardPage() {
     // 3. Bu Ayki Maaş Bordroları
     supabase
       .from("maas_bordro")
-      .select("toplam_odeme, net_ucret, durum")
+      .select("toplam_odeme, maas_net, durum")
       .eq("sirket_id", sirketId)
       .eq("donem_yil", yil)
       .eq("donem_ay", ay),
@@ -175,7 +175,7 @@ export default async function DashboardPage() {
     supabase
       .from("maas_bordro")
       .select(`
-        id, toplam_odeme, net_ucret, durum, donem_yil, donem_ay, created_at,
+        id, toplam_odeme, maas_net, durum, donem_yil, donem_ay, created_at,
         personel:personel_id(ad, soyad)
       `)
       .eq("sirket_id", sirketId)
@@ -225,7 +225,7 @@ export default async function DashboardPage() {
     id: b.id,
     personel_ad: b.personel ? `${b.personel.ad} ${b.personel.soyad}` : "-",
     donem: `${AY_ADLARI[b.donem_ay] || b.donem_ay} ${b.donem_yil}`,
-    toplam_odeme: Number(b.toplam_odeme ?? b.net_ucret ?? 0),
+    toplam_odeme: Number(b.toplam_odeme ?? b.maas_net ?? 0),
     durum: b.durum || "taslak",
   }));
 

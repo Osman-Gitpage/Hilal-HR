@@ -26,7 +26,7 @@ export const firmaSchema = z.object({
 export const belgeSchema = z.object({
   firma_id: z.string().uuid().nullable().optional(),
   tur: z.enum(["fatura", "makbuz", "dekont", "diger"], {
-    errorMap: () => ({ message: "Geçerli bir belge türü seçiniz." }),
+    message: "Geçerli bir belge türü seçiniz.",
   }),
   belge_no: guvenliMetinSchema(1, 50, true),
   tarih: z.string().refine(isValidDateString, {
@@ -36,7 +36,7 @@ export const belgeSchema = z.object({
   gemi_adi: guvenliMetinSchema(1, 100, false).nullable().optional(),
   tutar: paraTutariSchema,
   para_birimi: z.enum(["TRY", "EUR", "USD"], {
-    errorMap: () => ({ message: "Para birimi TRY, EUR veya USD olmalıdır." }),
+    message: "Para birimi TRY, EUR veya USD olmalıdır.",
   }),
   kur: paraTutariSchema,
   notlar: guvenliMetinSchema(1, 500, false).nullable().optional(),
@@ -49,11 +49,11 @@ export const odemeSchema = z.object({
   }),
   tutar: paraTutariSchema,
   para_birimi: z.enum(["TRY", "EUR", "USD"], {
-    errorMap: () => ({ message: "Para birimi TRY, EUR veya USD olmalıdır." }),
+    message: "Para birimi TRY, EUR veya USD olmalıdır.",
   }),
   kur: paraTutariSchema,
   yontem: z.enum(["banka", "nakit", "cek", "diger"], {
-    errorMap: () => ({ message: "Geçerli bir ödeme yöntemi seçiniz." }),
+    message: "Geçerli bir ödeme yöntemi seçiniz.",
   }),
   aciklama: guvenliMetinSchema(1, 255, false).nullable().optional(),
 });
