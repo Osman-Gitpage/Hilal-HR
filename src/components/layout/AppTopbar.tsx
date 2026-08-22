@@ -236,6 +236,7 @@ export function AppTopbar({ user, sirketler }: AppTopbarProps) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      </div>
     </header>
   );
 }
