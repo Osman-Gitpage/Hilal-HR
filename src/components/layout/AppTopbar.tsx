@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { LogOut, User, Building2, Menu, ChevronsUpDown, Check, Plus } from "lucide-react";
+import { LogOut, User, Building2, Menu, ChevronsUpDown, Check, Plus, Search } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { useSirketStore } from "@/stores/sirketStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -157,8 +157,36 @@ export function AppTopbar({ user, sirketler }: AppTopbarProps) {
         )}
       </div>
 
-      {/* Sağ: Kullanıcı menüsü */}
-      <DropdownMenu>
+      {/* Orta: Global Search Bar (Masaüstü) */}
+      <div className="flex-1 max-w-md mx-2 hidden md:block">
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent("open-global-search"))}
+          className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/60 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-xs text-muted-foreground transition-all group cursor-pointer"
+        >
+          <span className="flex items-center gap-2 truncate">
+            <Search className="w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+            <span className="text-zinc-500 dark:text-zinc-400 truncate">Personel, fatura, gemi veya işlem ara...</span>
+          </span>
+          <kbd className="inline-flex h-5 items-center gap-0.5 rounded border border-border/80 bg-background px-1.5 font-mono text-[10px] font-medium text-muted-foreground shrink-0">
+            ⌘K
+          </kbd>
+        </button>
+      </div>
+
+      {/* Sağ: Mobil Arama + Kullanıcı menüsü */}
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden h-9 w-9 text-zinc-500 hover:text-foreground"
+          onClick={() => window.dispatchEvent(new CustomEvent("open-global-search"))}
+          aria-label="Arama"
+        >
+          <Search className="h-4 w-4" />
+        </Button>
+
+        <DropdownMenu>
         <DropdownMenuTrigger
           id="btn-kullanici-menu"
           className="flex items-center gap-2 px-2 h-9 rounded-lg text-sm font-medium hover:bg-muted hover:text-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"

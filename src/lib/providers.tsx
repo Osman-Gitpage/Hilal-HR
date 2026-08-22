@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { SystemNotificationListener } from "@/components/layout/SystemNotificationListener";
 import { CookieConsent } from "@/components/layout/CookieConsent";
 import { PwaRegister } from "@/components/layout/PwaRegister";
+import { GlobalSearchDialog } from "@/components/layout/GlobalSearchDialog";
 
 export function Providers({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -63,6 +64,7 @@ export function Providers({ children }: { children: ReactNode }) {
       <TooltipProvider>{children}</TooltipProvider>
       <CookieConsent />
       <PwaRegister />
+      <GlobalSearchDialog />
       <Toaster position="bottom-right" richColors closeButton />
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
