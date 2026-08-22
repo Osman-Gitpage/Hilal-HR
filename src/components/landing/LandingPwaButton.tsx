@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Download, Smartphone, Laptop, Apple, Chrome, X, Check, ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
+import { Download, Smartphone, Laptop, Apple, Globe, X, Check, ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface BeforeInstallPromptEvent extends Event {
