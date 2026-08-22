@@ -258,7 +258,7 @@ export function AppSidebar() {
               size="icon"
               onClick={toggleSidebar}
               className={cn(
-                "w-full h-8 text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900/60 transition-colors duration-150",
+                "w-full h-8 text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900/60 transition-colors duration-150"
               )}
               id="btn-sidebar-toggle"
               aria-label={sidebarAcik ? "Sidebar'ı kapat" : "Sidebar'ı aç"}

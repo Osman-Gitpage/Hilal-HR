@@ -7,7 +7,7 @@ import { z } from "zod";
 
 // ─── 1. TC Kimlik No Doğrulama Algoritması ─────────────────────────────────
 export function isValidTCKN(tc: string): boolean {
-  const s = tc?.trim() ?? "";
+  const s = (tc?.trim() ?? "").replace(/\D/g, "");
   if (!/^\d{11}$/.test(s)) return false;
   if (s[0] === "0") return false;
 
@@ -28,7 +28,8 @@ export function isValidTCKN(tc: string): boolean {
 export const tcKimlikSchema = z
   .string({ message: "TC Kimlik No zorunludur." })
   .trim()
-  .refine((val) => /^\d{11}$/.test(val), {
+  .transform((val) => val.replace(/\D/g, ""))
+  .refine((val) => val.length === 11, {
     message: "TC Kimlik No 11 haneli sayı olmalıdır.",
   })
   .refine((val) => val[0] !== "0", {
@@ -40,7 +41,7 @@ export const tcKimlikSchema = z
 
 // ─── 2. VKN (Vergi Kimlik No) & TCKN Doğrulama ──────────────────────────────
 export function isValidVKN(vkn: string): boolean {
-  const s = vkn?.trim() ?? "";
+  const s = (vkn?.trim() ?? "").replace(/\D/g, "");
   if (!/^\d{10}$/.test(s)) return false;
 
   const d = s.split("").map(Number);
@@ -60,10 +61,10 @@ export function isValidVKN(vkn: string): boolean {
 export const vknOrTcknSchema = z
   .string()
   .trim()
+  .transform((val) => val.replace(/\D/g, ""))
   .refine(
-    (val) => {
-      if (!val) return true; // Opsiyonel durumlarda boş geçilebilir
-      const clean = val.replace(/\D/g, "");
+    (clean) => {
+      if (!clean) return true; // Opsiyonel durumlarda boş geçilebilir
       if (clean.length === 10) return isValidVKN(clean);
       if (clean.length === 11) return isValidTCKN(clean);
       return false;
@@ -71,11 +72,13 @@ export const vknOrTcknSchema = z
     {
       message: "Geçerli bir 10 haneli VKN veya 11 haneli TCKN giriniz.",
     }
-  );
+  )
+  .transform((val) => val || null);
 
 // ─── 3. TR IBAN Doğrulama (ISO 7064 Modulo 97) ──────────────────────────────
 export function isValidIBAN(iban: string): boolean {
   const clean = iban?.replace(/\s+/g, "").toUpperCase() ?? "";
+  if (!clean) return true;
   if (!/^TR\d{24}$/.test(clean)) return false;
 
   // Harfleri sayıya çevir (T=29, R=27) -> TR00... => ...292700
@@ -102,15 +105,17 @@ export const ibanSchema = z
     {
       message: "Geçerli bir Türkiye IBAN numarası giriniz (TR ile başlayan 26 karakter).",
     }
-  );
+  )
+  .transform((val) => val || null);
 
 // ─── 4. Türkiye GSM Telefon Doğrulama ───────────────────────────────────────
 export function normalizeTelefon(tel: string): string {
   let clean = tel?.replace(/\D/g, "") ?? "";
-  if (clean.startsWith("90") && clean.length === 12) {
+  if (clean.startsWith("0090") && clean.length === 14) {
+    clean = clean.slice(4);
+  } else if (clean.startsWith("90") && clean.length === 12) {
     clean = clean.slice(2);
-  }
-  if (clean.startsWith("0") && clean.length === 11) {
+  } else if (clean.startsWith("0") && clean.length === 11) {
     clean = clean.slice(1);
   }
   return clean;
@@ -159,21 +164,64 @@ export const emailSchema = (zorunlu = false) => {
   ).transform((val) => val || null);
 };
 
-// ─── 6. Para / Tutar Doğrulayıcı (Pozitif, Max 10 Ondalık) ───────────────────
+// ─── 6. Para / Tutar Doğrulayıcı (Pozitif & Sıfır İzinli) ────────────────────
+export function parseNumberString(val: string | number): number {
+  if (typeof val === "number") return val;
+  if (typeof val !== "string") return NaN;
+
+  let s = val.trim();
+  // Strip currency symbols and whitespace
+  s = s.replace(/[\s₺$€£TL]/gi, "");
+  if (!s) return NaN;
+
+  // Handle thousand separators vs decimal separators
+  const commaIdx = s.lastIndexOf(",");
+  const dotIdx = s.lastIndexOf(".");
+
+  if (commaIdx !== -1 && dotIdx !== -1) {
+    if (commaIdx > dotIdx) {
+      // e.g. 1.250,50 -> 1250.50
+      s = s.replace(/\./g, "").replace(",", ".");
+    } else {
+      // e.g. 1,250.50 -> 1250.50
+      s = s.replace(/,/g, "");
+    }
+  } else if (commaIdx !== -1) {
+    // e.g. 1250,50 -> 1250.50
+    s = s.replace(",", ".");
+  }
+
+  return Number(s);
+}
+
 export const paraTutariSchema = z
   .union([z.number(), z.string()])
-  .transform((val) => {
-    if (typeof val === "string") {
-      const clean = val.replace(",", ".").trim();
-      return Number(clean);
-    }
-    return val;
-  })
+  .transform((val) => parseNumberString(val))
   .refine((val) => !isNaN(val) && isFinite(val), {
     message: "Geçerli bir sayısal tutar giriniz.",
   })
   .refine((val) => val > 0, {
     message: "Tutar 0'dan büyük pozitif bir değer olmalıdır.",
+  })
+  .refine(
+    (val) => {
+      const str = val.toString();
+      const parts = str.split(".");
+      return parts.length === 1 || parts[1].length <= 10;
+    },
+    {
+      message: "Tutar en fazla 10 ondalık basamak içerebilir.",
+    }
+  );
+
+export const paraTutariSifirIzinliSchema = z
+  .union([z.number(), z.string()])
+  .transform((val) => parseNumberString(val))
+  .refine((val) => !isNaN(val) && isFinite(val), {
+    message: "Geçerli bir sayısal tutar giriniz.",
+  })
+  .refine((val) => val >= 0, {
+    message: "Tutar negatif olamaz.",
   })
   .refine(
     (val) => {
@@ -196,24 +244,56 @@ export function sanitizeHtml(str: string): string {
     .trim();
 }
 
-export const guvenliMetinSchema = (min = 1, max = 256, zorunlu = true) => {
-  let schema = z
-    .string()
-    .transform((val) => sanitizeHtml(val));
-
-  if (zorunlu) {
-    schema = schema.refine((val) => val.length >= min, {
+export function guvenliMetinZorunluSchema(min = 1, max = 256) {
+  return z
+    .string({ message: "Bu alan zorunludur." })
+    .transform((val) => sanitizeHtml(val))
+    .refine((val) => val.length >= min, {
       message: `Bu alan en az ${min} karakter olmalıdır.`,
+    })
+    .refine((val) => val.length <= max, {
+      message: `Bu alan en fazla ${max} karakter olabilir.`,
     });
+}
+
+export function guvenliMetinOpsiyonelSchema(min = 1, max = 256) {
+  return z
+    .string()
+    .optional()
+    .nullable()
+    .transform((val) => {
+      if (!val) return null;
+      const clean = sanitizeHtml(val);
+      return clean ? clean : null;
+    })
+    .refine((val) => !val || val.length <= max, {
+      message: `Bu alan en fazla ${max} karakter olabilir.`,
+    });
+}
+
+export function guvenliMetinSchema(
+  min?: number,
+  max?: number,
+  zorunlu?: true
+): ReturnType<typeof guvenliMetinZorunluSchema>;
+export function guvenliMetinSchema(
+  min: number,
+  max: number,
+  zorunlu: false
+): ReturnType<typeof guvenliMetinOpsiyonelSchema>;
+export function guvenliMetinSchema(
+  min = 1,
+  max = 256,
+  zorunlu = true
+) {
+  if (zorunlu) {
+    return guvenliMetinZorunluSchema(min, max);
   }
+  return guvenliMetinOpsiyonelSchema(min, max);
+}
 
-  return schema.refine((val) => val.length <= max, {
-    message: `Bu alan en fazla ${max} karakter olabilir.`,
-  });
-};
-
-// ─── 8. Türkçe İsim / Soyisim (Emoji, Sayı & Özel Sembol Yasak) ─────────────
-export const turkceIsimSchema = (alanAdi: string, min = 2, max = 50) =>
+// ─── 8. Türkçe & Evrensel İsim Doğrulama ─────────────────────────────────────
+export const turkceIsimSchema = (alanAdi: string, min = 2, max = 60) =>
   z
     .string({ message: `${alanAdi} alanı zorunludur.` })
     .transform((val) => sanitizeHtml(val))
@@ -224,7 +304,7 @@ export const turkceIsimSchema = (alanAdi: string, min = 2, max = 50) =>
       message: `${alanAdi} en fazla ${max} karakter olabilir.`,
     })
     .refine(
-      (val) => /^[a-zA-ZçÇğĞıİöÖşŞüÜ\s'-]+$/.test(val),
+      (val) => /^[\p{L}\s'.-]+$/u.test(val),
       {
         message: `${alanAdi} yalnızca harf içerebilir (sayı, emoji ve özel sembol girilemez).`,
       }
@@ -232,6 +312,7 @@ export const turkceIsimSchema = (alanAdi: string, min = 2, max = 50) =>
 
 // ─── 9. Doğum Tarihi & İşe Başlama Tarihi Doğrulama ─────────────────────────
 export function isValidDateString(dateStr: string): boolean {
+  if (!dateStr || typeof dateStr !== "string") return false;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
   const d = new Date(dateStr);
   return d instanceof Date && !isNaN(d.getTime());

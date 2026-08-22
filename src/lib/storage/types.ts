@@ -172,6 +172,10 @@ export interface StorageConfig {
   uploadUrlExpiry: number;
   /** Presigned download URL expiry in seconds */
   downloadUrlExpiry: number;
+  /** Optional custom storage class override */
+  storageClass?: string;
+  /** Force path style endpoint access (default: true) */
+  forcePathStyle?: boolean;
 }
 
 // ─── Server Action Results ────────────────────────────────────────────────────

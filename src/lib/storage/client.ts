@@ -23,15 +23,46 @@ let _config: StorageConfig | null = null;
 export function getStorageClient(): S3Client {
   if (!_client) {
     const config = getStorageConfig();
+    const endpointUrl =
+      config.endpoint.startsWith("http://") || config.endpoint.startsWith("https://")
+        ? config.endpoint
+        : `https://${config.endpoint}`;
+
     _client = new S3Client({
-      endpoint: `https://${config.endpoint}`,
-      region: config.region,
+      endpoint: endpointUrl,
+      region: config.region || "auto",
       credentials: {
         accessKeyId: config.keyId,
         secretAccessKey: config.appKey,
       },
-      forcePathStyle: true,
+      forcePathStyle: config.forcePathStyle ?? true,
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
     });
+
+    // Strip x-amz-storage-class header for S3-compatible clusters (Garage, Supabase, etc.)
+    // unless explicitly configured via B2_STORAGE_CLASS or S3_STORAGE_CLASS.
+    _client.middlewareStack.add(
+      (next) => async (args: any) => {
+        const request = args.request;
+        if (request?.headers) {
+          const customClass = process.env.B2_STORAGE_CLASS || process.env.S3_STORAGE_CLASS;
+          if (customClass) {
+            request.headers["x-amz-storage-class"] = customClass;
+          } else {
+            delete request.headers["x-amz-storage-class"];
+            delete request.headers["X-Amz-Storage-Class"];
+            delete request.headers["x-amz-storage-class".toLowerCase()];
+          }
+        }
+        return next(args);
+      },
+      {
+        step: "build",
+        name: "handleStorageClassHeader",
+        priority: "high",
+      }
+    );
   }
   return _client;
 }

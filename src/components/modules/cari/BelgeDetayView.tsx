@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { HelpInfo } from "@/components/ui/help-info";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -413,7 +414,14 @@ export function BelgeDetayView({ belgeId }: { belgeId: string }) {
             {/* Progress + Ödenen/Kalan/Oran */}
             <div className="space-y-3">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>Tahsilat oranı</span>
+                <span className="flex items-center gap-1.5 font-medium">
+                  Tahsilat oranı
+                  <HelpInfo
+                    title="Tahsilat Oranı"
+                    description="Belgenin toplam alacak tutarına karşılık şimdiye kadar tahsil edilen ödemelerin yüzdesel tamamlanma oranıdır."
+                    side="right"
+                  />
+                </span>
                 <span className="font-bold tabular-nums">{Math.round(pct)}%</span>
               </div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">

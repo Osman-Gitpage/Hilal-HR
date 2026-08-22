@@ -66,11 +66,15 @@ export async function uploadToB2(params: {
     const client = getStorageClient();
     const bucket = getBucketName();
 
+    const customStorageClass =
+      process.env.B2_STORAGE_CLASS || process.env.S3_STORAGE_CLASS;
+
     const command = new PutObjectCommand({
       Bucket: bucket,
       Key: objectKey,
       Body: buffer,
       ContentType: validation.mimeType,
+      ...(customStorageClass ? { StorageClass: customStorageClass as any } : {}),
     });
 
     await client.send(command);
@@ -128,11 +132,15 @@ export async function uploadBufferToB2(params: {
     const client = getStorageClient();
     const bucket = getBucketName();
 
+    const customStorageClass =
+      process.env.B2_STORAGE_CLASS || process.env.S3_STORAGE_CLASS;
+
     const command = new PutObjectCommand({
       Bucket: bucket,
       Key: objectKey,
       Body: buffer,
       ContentType: contentType,
+      ...(customStorageClass ? { StorageClass: customStorageClass as any } : {}),
     });
 
     await client.send(command);

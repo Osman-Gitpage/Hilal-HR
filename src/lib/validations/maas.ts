@@ -41,8 +41,28 @@ export const zamUygulaSchema = z.object({
   aciklama: guvenliMetinSchema(1, 256, false).nullable().optional(),
 });
 
+export const bordroDurumGuncelleSchema = z.object({
+  bordro_id: z.string().uuid("Geçerli bir bordro seçiniz."),
+  yeni_durum: z.enum(["taslak", "kontrol_bekliyor", "onaylandi", "kilitlendi"], {
+    message: "Geçersiz bordro durumu.",
+  }),
+});
+
+export const bankaOdemeSatirSchema = z.object({
+  personel_id: z.string().uuid(),
+  banka: paraTutariSchema,
+  bes_bordro: z.number().nonnegative().optional().default(0),
+  tazminat: z.number().nonnegative().optional().default(0),
+  avans: z.number().nonnegative().optional().default(0),
+  toplam_odeme: paraTutariSchema,
+  elden_banka: z.number().optional(),
+});
+
 export type BordroOlusturInput = z.infer<typeof bordroOlusturSchema>;
 export type AvansEkleInput = z.infer<typeof avansEkleSchema>;
 export type PrimEkleInput = z.infer<typeof primEkleSchema>;
 export type KesintiEkleInput = z.infer<typeof kesintiEkleSchema>;
 export type ZamUygulaInput = z.infer<typeof zamUygulaSchema>;
+export type BordroDurumGuncelleInput = z.infer<typeof bordroDurumGuncelleSchema>;
+export type BankaOdemeSatirInput = z.infer<typeof bankaOdemeSatirSchema>;
+

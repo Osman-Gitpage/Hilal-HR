@@ -95,7 +95,7 @@ function Slot({ kategori, dosya, yukleniyor, siliniyor, onYukle, onSil, onGorunt
 
   if (yukleniyor) {
     return (
-      <div className="flex-1 rounded-xl border border-border/40 bg-muted/20 p-4 flex flex-col items-center justify-center gap-2 min-h-[110px]">
+      <div className="w-full min-w-0 rounded-xl border border-border/40 bg-muted/20 p-3 flex flex-col items-center justify-center gap-2 min-h-[110px]">
         <Loader2 className={`h-5 w-5 animate-spin ${accentColor}`} />
         <p className="text-xs text-muted-foreground">Yükleniyor…</p>
       </div>
@@ -107,56 +107,63 @@ function Slot({ kategori, dosya, yukleniyor, siliniyor, onYukle, onSil, onGorunt
     const isPdf = ext === "pdf";
 
     return (
-      <div className={`flex-1 rounded-xl border p-3.5 ${accentBg} group relative transition-all`}>
-        {/* Kategori etiketi */}
-        <div className={`flex items-center gap-1.5 mb-2.5`}>
-          <Icon className={`h-3.5 w-3.5 ${accentColor}`} />
-          <span className={`text-[10px] font-bold uppercase tracking-wider ${accentColor}`}>{label}</span>
-        </div>
-
-        {/* Dosya bilgisi */}
-        <div className="flex items-start gap-2.5 mb-3">
-          <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
-            isPdf ? "bg-rose-100 dark:bg-rose-900/30" : "bg-blue-100 dark:bg-blue-900/30"
-          }`}>
-            {isPdf
-              ? <FileText className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-              : <FileIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            }
+      <div className={`w-full min-w-0 rounded-xl border p-2.5 sm:p-3 ${accentBg} group relative transition-all flex flex-col justify-between overflow-hidden`}>
+        {/* Üst Kısım: Kategori ve Dosya Bilgisi */}
+        <div className="min-w-0 space-y-2 mb-2.5">
+          {/* Kategori etiketi */}
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Icon className={`h-3.5 w-3.5 shrink-0 ${accentColor}`} />
+            <span className={`text-[10px] font-bold uppercase tracking-wider truncate ${accentColor}`}>{label}</span>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold truncate leading-tight">{dosya.dosya_adi}</p>
-            {dosya.boyut_byte && (
-              <p className="text-[10px] text-muted-foreground mt-0.5">{formatBoyut(dosya.boyut_byte)}</p>
-            )}
+
+          {/* Dosya bilgisi */}
+          <div className="flex items-start gap-2 min-w-0">
+            <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
+              isPdf ? "bg-rose-100 dark:bg-rose-900/30" : "bg-blue-100 dark:bg-blue-900/30"
+            }`}>
+              {isPdf
+                ? <FileText className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                : <FileIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              }
+            </div>
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <p className="text-xs font-semibold truncate leading-tight" title={dosya.dosya_adi}>
+                {dosya.dosya_adi}
+              </p>
+              {dosya.boyut_byte && (
+                <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{formatBoyut(dosya.boyut_byte)}</p>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Aksiyonlar */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 mt-auto pt-1 min-w-0">
           <Button
             variant="ghost"
             size="sm"
-            className={`h-7 flex-1 gap-1.5 text-xs ${accentColor} hover:bg-white/60 dark:hover:bg-black/20`}
+            className={`h-7 flex-1 min-w-0 px-2 gap-1 text-xs font-medium ${accentColor} hover:bg-white/60 dark:hover:bg-black/20`}
             onClick={onGoruntule}
+            title="Görüntüle"
           >
-            <Eye className="h-3 w-3" />
-            Görüntüle
+            <Eye className="h-3 w-3 shrink-0" />
+            <span className="truncate">Görüntüle</span>
           </Button>
           <button
             type="button"
             title="İndir"
             onClick={onIndir}
-            className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:bg-white/60 dark:hover:bg-black/20 hover:text-foreground transition-colors"
+            className="inline-flex items-center justify-center h-7 w-7 shrink-0 rounded-md text-muted-foreground hover:bg-white/60 dark:hover:bg-black/20 hover:text-foreground transition-colors"
           >
             <Download className="h-3 w-3" />
           </button>
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
+            className="h-7 w-7 shrink-0 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
             onClick={onSil}
             disabled={siliniyor}
+            title="Sil"
           >
             {siliniyor ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
           </Button>
@@ -168,13 +175,13 @@ function Slot({ kategori, dosya, yukleniyor, siliniyor, onYukle, onSil, onGorunt
   // Boş slot — placeholder
   return (
     <div
-      className={`flex-1 rounded-xl border-2 border-dashed ${
+      className={`w-full min-w-0 rounded-xl border-2 border-dashed ${
         dragOver
           ? dragActiveBorder
           : `${placeholderBorder} ${accentHover}`
       } 
-        p-4 flex flex-col items-center justify-center gap-2 min-h-[110px] 
-        cursor-pointer transition-all duration-200 group`}
+        p-3 flex flex-col items-center justify-center gap-1.5 min-h-[110px] 
+        cursor-pointer transition-all duration-200 group text-center overflow-hidden`}
       onClick={() => inputRef.current?.click()}
       onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
       onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
@@ -198,16 +205,16 @@ function Slot({ kategori, dosya, yukleniyor, siliniyor, onYukle, onSil, onGorunt
           e.target.value = "";
         }}
       />
-      <div className={`h-8 w-8 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110 ${
+      <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${
         dragOver ? "scale-110" : ""
       } ${
         isBelge ? "bg-violet-100 dark:bg-violet-900/30" : "bg-emerald-100 dark:bg-emerald-900/30"
       }`}>
-        <Icon className={`h-4 w-4 ${accentColor}`} />
+        <Icon className={`h-4 w-4 shrink-0 ${accentColor}`} />
       </div>
-      <div className="text-center">
-        <p className={`text-xs font-semibold ${accentColor}`}>{label} ekle</p>
-        <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+      <div className="min-w-0 max-w-full px-1">
+        <p className={`text-xs font-semibold truncate ${accentColor}`}>{label} ekle</p>
+        <p className="text-[10px] text-muted-foreground/60 mt-0.5 truncate">
           {dragOver ? "Bırak ve yükle" : "Tıkla veya sürükle"}
         </p>
       </div>
@@ -277,14 +284,19 @@ function CiftKarti({
   return (
     <div className="rounded-2xl border border-border/50 bg-card overflow-hidden">
       {/* Kart başlığı */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30 border-b border-border/40">
-        <div className="flex items-center gap-2">
-          <div className="h-5 w-5 rounded-md bg-primary/10 flex items-center justify-center">
+      <div className="flex items-center justify-between px-3.5 py-2.5 bg-muted/30 border-b border-border/40 gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div className="h-5 w-5 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
             <span className="text-[10px] font-black text-primary">#{ciftNo}</span>
           </div>
-          <span className="text-xs font-semibold text-muted-foreground">
+          <span
+            className="text-xs font-semibold text-muted-foreground truncate"
+            title={belgeDosya?.dosya_adi || dekontDosya?.dosya_adi || `Belge-Dekont Çifti ${ciftNo}`}
+          >
             {belgeDosya?.dosya_adi
-              ? belgeDosya.dosya_adi.replace(/\.[^.]+$/, "").slice(0, 30)
+              ? belgeDosya.dosya_adi.replace(/\.[^.]+$/, "")
+              : dekontDosya?.dosya_adi
+              ? dekontDosya.dosya_adi.replace(/\.[^.]+$/, "")
               : `Belge-Dekont Çifti ${ciftNo}`}
           </span>
         </div>
@@ -292,7 +304,7 @@ function CiftKarti({
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10"
+            className="h-6 w-6 shrink-0 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10"
             onClick={onCiftSil}
             title="Boş çifti kaldır"
           >
@@ -302,7 +314,7 @@ function CiftKarti({
       </div>
 
       {/* Slot'lar */}
-      <div className="p-3 flex gap-3">
+      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 min-w-0">
         <Slot
           kategori="belge"
           dosya={belgeDosya}
@@ -356,7 +368,7 @@ function DigerDosyaSatiri({ dosya, onSil, siliniyor, onGoruntule, onIndir }: Dig
   const isExcel = ["xlsx", "xls", "csv"].includes(ext);
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 group hover:bg-muted/40 transition-colors">
+    <div className="flex items-center gap-3 px-3.5 py-2.5 group hover:bg-muted/40 transition-colors min-w-0">
       <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
         isPdf ? "bg-rose-100 dark:bg-rose-900/30"
         : isExcel ? "bg-emerald-100 dark:bg-emerald-900/30"
@@ -367,14 +379,15 @@ function DigerDosyaSatiri({ dosya, onSil, siliniyor, onGoruntule, onIndir }: Dig
         {!isPdf && !isExcel && <FileIcon className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold truncate">{dosya.dosya_adi}</p>
+        <p className="text-sm font-semibold truncate" title={dosya.dosya_adi}>{dosya.dosya_adi}</p>
         {dosya.boyut_byte && <p className="text-xs text-muted-foreground">{formatBoyut(dosya.boyut_byte)}</p>}
       </div>
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-1 shrink-0 opacity-80 sm:opacity-0 group-hover:opacity-100 transition-opacity">
         <Button
           variant="ghost" size="icon"
           className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10"
           onClick={onGoruntule}
+          title="Görüntüle"
         >
           <Eye className="h-3.5 w-3.5" />
         </Button>
@@ -390,6 +403,7 @@ function DigerDosyaSatiri({ dosya, onSil, siliniyor, onGoruntule, onIndir }: Dig
           variant="ghost" size="icon"
           className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
           onClick={onSil} disabled={siliniyor}
+          title="Sil"
         >
           {siliniyor ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
         </Button>

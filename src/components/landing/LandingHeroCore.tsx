@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Check, Lightbulb, ShieldCheck, Eye, Sparkles, FileCheck2, ArrowRight, Building2 } from "lucide-react";
+import { LandingPwaButton } from "./LandingPwaButton";
 
 export default function LandingHeroCore() {
   return (
@@ -83,15 +84,17 @@ export default function LandingHeroCore() {
             Tersane ve şantiye özlük paketlerini saniyeler içinde otomatik üretin. Geriye dönük ezilmeyen versiyonlu bordro (v1, v2) ve 31 günlük puantaj matrisi ile sıfır hatayla çalışın.
           </p>
 
-          {/* Primary Action Button (Emerald Gradient Pill) */}
-          <div className="pt-2">
+          {/* Primary Action Buttons (Try Online & Direct Install) */}
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3.5 w-full sm:w-auto">
             <Link
               href="/giris"
-              className="inline-flex items-center gap-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold px-8 py-4 rounded-full shadow-xl shadow-emerald-600/30 transition-all duration-200 text-base active:scale-95 hover:shadow-2xl"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold px-8 py-4 rounded-full shadow-xl shadow-emerald-600/30 transition-all duration-200 text-base active:scale-95 hover:shadow-2xl"
             >
               <span>Hemen Ücretsiz Deneyin</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
+
+            <LandingPwaButton variant="hero" className="w-full sm:w-auto" />
           </div>
 
         </div>

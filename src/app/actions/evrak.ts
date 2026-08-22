@@ -15,8 +15,8 @@ import type {
 } from "@/types/evrak";
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// AUTH CONTEXT
 import { getAuthContext } from "@/lib/auth/context";
+import { evrakYukleSchema } from "@/lib/validations/evrak";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOG YARDIMCISI (internal)
@@ -454,6 +454,11 @@ export async function evrakOlustur(params: {
   bitis_tarihi?: string;
   tetenoz_iceriyor?: boolean;
 }) {
+  const parsed = evrakYukleSchema.safeParse(params);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Geçersiz evrak verisi.");
+  }
+
   const { supabase, user, sirketId } = await getAuthContext();
 
   // Gerçek UUID Kategori ID'sini çöz

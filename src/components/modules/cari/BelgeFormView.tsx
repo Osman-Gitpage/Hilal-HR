@@ -32,6 +32,7 @@ import {
 import { belgeNoOner, bugunYYYYMMDD, paraFormat, formatKur } from "@/lib/cari";
 import { sonrakiBelgeNoGetir } from "@/app/actions/cari";
 import type { BelgeTur, ParaBirimi, BelgePayload } from "@/types/cari";
+import { HelpInfo } from "@/components/ui/help-info";
 
 interface BelgeFormViewProps {
   /** Düzenleme modunda belge ID'si. Tanımsızsa yeni ekleme. */
@@ -56,11 +57,15 @@ function FormAlani({
   label,
   required,
   hint,
+  helpTitle,
+  helpDesc,
   children,
 }: {
   label: string;
   required?: boolean;
   hint?: string;
+  helpTitle?: React.ReactNode;
+  helpDesc?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -74,6 +79,9 @@ function FormAlani({
           <span className="text-[10px] text-muted-foreground/70 font-normal">
             {hint}
           </span>
+        )}
+        {helpDesc && (
+          <HelpInfo title={helpTitle || label} description={helpDesc} side="right" />
         )}
       </div>
       {children}
@@ -250,7 +258,11 @@ export function BelgeFormView({ belgeId }: BelgeFormViewProps) {
           </div>
           <div className="p-5 grid grid-cols-2 gap-4">
             {/* Tür */}
-            <FormAlani label="Belge Türü" required>
+            <FormAlani
+              label="Belge Türü"
+              required
+              helpDesc="Fatura: Resmi vergi faturası. Proforma: Ön fatura/teklif. Hesap Bilgisi: Cari ekstre/alacak kaydı."
+            >
               <Select value={tur} onValueChange={(v) => handleTurDegis(v as BelgeTur)}>
                 <SelectTrigger className="h-9 text-sm">
                   <SelectValue />
@@ -297,7 +309,11 @@ export function BelgeFormView({ belgeId }: BelgeFormViewProps) {
             </FormAlani>
 
             {/* Firma */}
-            <FormAlani label="Firma" hint="(isteğe bağlı)">
+            <FormAlani
+              label="Firma"
+              hint="(isteğe bağlı)"
+              helpDesc="Belgenin ilişkilendirileceği cari firma hesabıdır. Borç/alacak takibi için seçilmesi önerilir."
+            >
               <div className="flex gap-2">
                 <Select value={firmaId} onValueChange={(v) => setFirmaId(v ?? "yok")}>
                   <SelectTrigger className="h-9 text-sm flex-1">
@@ -419,7 +435,11 @@ export function BelgeFormView({ belgeId }: BelgeFormViewProps) {
             </FormAlani>
 
             {/* Kur */}
-            <FormAlani label="Kur" hint="(TL)">
+            <FormAlani
+              label="Kur"
+              hint="(TL)"
+              helpDesc="Dövizli işlemlerde 1 birim yabancı paranın TL cinsinden kur değeridir."
+            >
               <div className="relative">
                 <RefreshCw className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
@@ -437,7 +457,11 @@ export function BelgeFormView({ belgeId }: BelgeFormViewProps) {
 
             {/* TL Karşılığı (Doğrudan girilebilir) */}
             {paraBirimi !== "TRY" && (
-              <FormAlani label="Toplam TL Karşılığı" hint="(Hedef TL)">
+              <FormAlani
+                label="Toplam TL Karşılığı"
+                hint="(Hedef TL)"
+                helpDesc="Hedef TL tutarını doğrudan yazdığınızda kur otomatik 10 haneli hassasiyetle tersine hesaplanır."
+              >
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">
                     ₺

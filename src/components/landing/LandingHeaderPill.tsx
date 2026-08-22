@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import { createClient } from "@/supabase/client";
 import { Sparkles, LayoutDashboard, LogIn, ChevronRight } from "lucide-react";
+import { LandingPwaButton } from "./LandingPwaButton";
 
 
 export default function LandingHeaderPill() {
@@ -55,6 +56,7 @@ export default function LandingHeaderPill() {
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
+          <LandingPwaButton variant="header" />
           {isLoggedIn ? (
             <Link
               href="/dashboard"

@@ -9,7 +9,19 @@ const inter = Inter({
   display: "swap",
 });
 
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://hilaloffice.com";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(appUrl),
+  alternates: {
+    canonical: "/",
+  },
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Hilal Office",
+  },
   title: {
     default: "Hilal Office",
     template: "%s — Hilal Office",
@@ -22,7 +34,7 @@ export const metadata: Metadata = {
       { url: "/test/fav.png", type: "image/png", sizes: "any" },
     ],
     apple: [
-      { url: "/test/fav.png", sizes: "180x180", type: "image/png" },
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
     ],
     shortcut: "/test/fav.png",
   },

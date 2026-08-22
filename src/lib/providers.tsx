@@ -6,6 +6,8 @@ import { useState, useEffect, type ReactNode } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { SystemNotificationListener } from "@/components/layout/SystemNotificationListener";
+import { CookieConsent } from "@/components/layout/CookieConsent";
+import { PwaRegister } from "@/components/layout/PwaRegister";
 
 export function Providers({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -59,6 +61,8 @@ export function Providers({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <SystemNotificationListener />
       <TooltipProvider>{children}</TooltipProvider>
+      <CookieConsent />
+      <PwaRegister />
       <Toaster position="bottom-right" richColors closeButton />
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>

@@ -21,7 +21,10 @@ export const personelEkleSchema = z.object({
   soyad: turkceIsimSchema("Soyad", 2, 50),
   tc: tcKimlikSchema,
   dogum_tarihi: dogumTarihiSchema.optional(),
-  cinsiyet: z.enum(["erkek", "kadin"]).nullable().optional(),
+  cinsiyet: z
+    .union([z.enum(["erkek", "kadin"]), z.literal(""), z.null()])
+    .optional()
+    .transform((val) => (!val ? null : (val as "erkek" | "kadin"))),
   ise_baslama_tarihi: iseBaslamaTarihiSchema,
   maas_net: paraTutariSchema,
   sgk_sicil: guvenliMetinSchema(1, 50, false).nullable().optional(),
@@ -41,7 +44,10 @@ export const personelGuncelleSchema = z.object({
   soyad: turkceIsimSchema("Soyad", 2, 50),
   tc: tcKimlikSchema,
   dogum_tarihi: dogumTarihiSchema.optional(),
-  cinsiyet: z.enum(["erkek", "kadin"]).nullable().optional(),
+  cinsiyet: z
+    .union([z.enum(["erkek", "kadin"]), z.literal(""), z.null()])
+    .optional()
+    .transform((val) => (!val ? null : (val as "erkek" | "kadin"))),
   maas_net: paraTutariSchema.optional(),
   sgk_sicil: guvenliMetinSchema(1, 50, false).nullable().optional(),
   gorev_unvan: guvenliMetinSchema(1, 100, false).nullable().optional(),
@@ -54,5 +60,27 @@ export const personelGuncelleSchema = z.object({
   iban: ibanSchema.optional(),
 });
 
+export const hizliPersonelEkleSchema = z.object({
+  ad: turkceIsimSchema("Ad", 2, 50),
+  soyad: turkceIsimSchema("Soyad", 2, 50),
+  tc: tcKimlikSchema,
+  gorev_unvan: guvenliMetinSchema(1, 100, false).nullable().optional(),
+  ise_baslama_tarihi: iseBaslamaTarihiSchema,
+  maas_net: paraTutariSchema,
+  telefon: telefonGsmSchema.optional(),
+  iban: ibanSchema.optional(),
+});
+
+export const istenAyrilmaSchema = z.object({
+  personel_id: z.string().uuid("Geçerli bir personel seçiniz."),
+  isten_ayrilis_tarihi: z.string().refine((val) => /^\d{4}-\d{2}-\d{2}$/.test(val), {
+    message: "Geçerli bir ayrılış tarihi giriniz (YYYY-MM-DD).",
+  }),
+  isten_ayrilis_nedeni: guvenliMetinSchema(2, 255, true),
+});
+
 export type PersonelEkleInput = z.infer<typeof personelEkleSchema>;
 export type PersonelGuncelleInput = z.infer<typeof personelGuncelleSchema>;
+export type HizliPersonelEkleInput = z.infer<typeof hizliPersonelEkleSchema>;
+export type IstenAyrilmaInput = z.infer<typeof istenAyrilmaSchema>;
+

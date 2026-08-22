@@ -52,6 +52,9 @@ export function loadStorageConfig(): StorageConfig {
     );
   }
 
+  const storageClass = process.env.B2_STORAGE_CLASS || process.env.S3_STORAGE_CLASS || undefined;
+  const forcePathStyle = process.env.B2_FORCE_PATH_STYLE !== "false";
+
   return {
     endpoint: endpoint!,
     keyId: keyId!,
@@ -61,5 +64,7 @@ export function loadStorageConfig(): StorageConfig {
     maxFileSize: MAX_FILE_SIZE,
     uploadUrlExpiry: UPLOAD_URL_EXPIRY,
     downloadUrlExpiry: DOWNLOAD_URL_EXPIRY,
+    storageClass,
+    forcePathStyle,
   };
 }
