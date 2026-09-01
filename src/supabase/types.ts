@@ -14,6 +14,362 @@ export type Database = {
   }
   public: {
     Tables: {
+      arac_cezalar: {
+        Row: {
+          aciklama: string | null
+          arac_id: string
+          ceza_turu: string
+          created_at: string | null
+          id: string
+          sirket_id: string
+          tarih: string
+          tutar: number
+        }
+        Insert: {
+          aciklama?: string | null
+          arac_id: string
+          ceza_turu: string
+          created_at?: string | null
+          id?: string
+          sirket_id: string
+          tarih: string
+          tutar: number
+        }
+        Update: {
+          aciklama?: string | null
+          arac_id?: string
+          ceza_turu?: string
+          created_at?: string | null
+          id?: string
+          sirket_id?: string
+          tarih?: string
+          tutar?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arac_cezalar_arac_id_fkey"
+            columns: ["arac_id"]
+            isOneToOne: false
+            referencedRelation: "araclar"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arac_cezalar_sirket_id_fkey"
+            columns: ["sirket_id"]
+            isOneToOne: false
+            referencedRelation: "sirketler"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arac_muayene: {
+        Row: {
+          arac_id: string
+          belge_adi: string | null
+          belge_url: string | null
+          egzoz_emisyon_tarihi: string | null
+          id: string
+          istasyon: string | null
+          muayene_tarihi: string
+          muayene_ucreti: number | null
+          rapor_no: string | null
+          sirket_id: string
+          sonuc: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          arac_id: string
+          belge_adi?: string | null
+          belge_url?: string | null
+          egzoz_emisyon_tarihi?: string | null
+          id?: string
+          istasyon?: string | null
+          muayene_tarihi: string
+          muayene_ucreti?: number | null
+          rapor_no?: string | null
+          sirket_id: string
+          sonuc?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          arac_id?: string
+          belge_adi?: string | null
+          belge_url?: string | null
+          egzoz_emisyon_tarihi?: string | null
+          id?: string
+          istasyon?: string | null
+          muayene_tarihi?: string
+          muayene_ucreti?: number | null
+          rapor_no?: string | null
+          sirket_id?: string
+          sonuc?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arac_muayene_arac_id_fkey"
+            columns: ["arac_id"]
+            isOneToOne: true
+            referencedRelation: "araclar"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arac_muayene_sirket_id_fkey"
+            columns: ["sirket_id"]
+            isOneToOne: false
+            referencedRelation: "sirketler"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arac_policeler: {
+        Row: {
+          arac_id: string
+          belge_adi: string | null
+          belge_url: string | null
+          bitis_tarihi: string
+          created_at: string | null
+          id: string
+          police_no: string
+          sirket: string
+          sirket_id: string
+          tur: string
+          tutar: number | null
+        }
+        Insert: {
+          arac_id: string
+          belge_adi?: string | null
+          belge_url?: string | null
+          bitis_tarihi: string
+          created_at?: string | null
+          id?: string
+          police_no: string
+          sirket: string
+          sirket_id: string
+          tur: string
+          tutar?: number | null
+        }
+        Update: {
+          arac_id?: string
+          belge_adi?: string | null
+          belge_url?: string | null
+          bitis_tarihi?: string
+          created_at?: string | null
+          id?: string
+          police_no?: string
+          sirket?: string
+          sirket_id?: string
+          tur?: string
+          tutar?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arac_policeler_arac_id_fkey"
+            columns: ["arac_id"]
+            isOneToOne: false
+            referencedRelation: "araclar"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arac_policeler_sirket_id_fkey"
+            columns: ["sirket_id"]
+            isOneToOne: false
+            referencedRelation: "sirketler"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arac_servis_kayitlari: {
+        Row: {
+          aciklama: string
+          arac_id: string
+          created_at: string | null
+          fatura_dosya_adi: string | null
+          fatura_dosya_url: string | null
+          fatura_no: string | null
+          id: string
+          islem_turu: string
+          km: number
+          servis_adi: string
+          sirket_id: string
+          tarih: string
+          tutar: number
+          yil: number
+        }
+        Insert: {
+          aciklama: string
+          arac_id: string
+          created_at?: string | null
+          fatura_dosya_adi?: string | null
+          fatura_dosya_url?: string | null
+          fatura_no?: string | null
+          id?: string
+          islem_turu: string
+          km: number
+          servis_adi: string
+          sirket_id: string
+          tarih: string
+          tutar: number
+          yil: number
+        }
+        Update: {
+          aciklama?: string
+          arac_id?: string
+          created_at?: string | null
+          fatura_dosya_adi?: string | null
+          fatura_dosya_url?: string | null
+          fatura_no?: string | null
+          id?: string
+          islem_turu?: string
+          km?: number
+          servis_adi?: string
+          sirket_id?: string
+          tarih?: string
+          tutar?: number
+          yil?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arac_servis_kayitlari_arac_id_fkey"
+            columns: ["arac_id"]
+            isOneToOne: false
+            referencedRelation: "araclar"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arac_servis_kayitlari_sirket_id_fkey"
+            columns: ["sirket_id"]
+            isOneToOne: false
+            referencedRelation: "sirketler"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arac_yakit_kayitlari: {
+        Row: {
+          arac_id: string
+          ay: string
+          belge_no: string | null
+          birim_fiyat: number
+          created_at: string | null
+          id: string
+          miktar: number
+          sirket_id: string
+          toplam_tutar: number
+          yakit_turu: string
+          yil: number
+        }
+        Insert: {
+          arac_id: string
+          ay: string
+          belge_no?: string | null
+          birim_fiyat: number
+          created_at?: string | null
+          id?: string
+          miktar: number
+          sirket_id: string
+          toplam_tutar: number
+          yakit_turu: string
+          yil: number
+        }
+        Update: {
+          arac_id?: string
+          ay?: string
+          belge_no?: string | null
+          birim_fiyat?: number
+          created_at?: string | null
+          id?: string
+          miktar?: number
+          sirket_id?: string
+          toplam_tutar?: number
+          yakit_turu?: string
+          yil?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arac_yakit_kayitlari_arac_id_fkey"
+            columns: ["arac_id"]
+            isOneToOne: false
+            referencedRelation: "araclar"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arac_yakit_kayitlari_sirket_id_fkey"
+            columns: ["sirket_id"]
+            isOneToOne: false
+            referencedRelation: "sirketler"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      araclar: {
+        Row: {
+          alt_baslik: string | null
+          created_at: string | null
+          gorsel: string | null
+          id: string
+          km: number | null
+          marka: string
+          model: string
+          motor_no: string | null
+          paket: string | null
+          plaka: string
+          ruhsat_seri_no: string | null
+          sase_no: string | null
+          sirket_id: string
+          updated_at: string | null
+          vites: string
+          yakit_tipi: string
+          yil: number
+        }
+        Insert: {
+          alt_baslik?: string | null
+          created_at?: string | null
+          gorsel?: string | null
+          id?: string
+          km?: number | null
+          marka: string
+          model: string
+          motor_no?: string | null
+          paket?: string | null
+          plaka: string
+          ruhsat_seri_no?: string | null
+          sase_no?: string | null
+          sirket_id: string
+          updated_at?: string | null
+          vites: string
+          yakit_tipi: string
+          yil: number
+        }
+        Update: {
+          alt_baslik?: string | null
+          created_at?: string | null
+          gorsel?: string | null
+          id?: string
+          km?: number | null
+          marka?: string
+          model?: string
+          motor_no?: string | null
+          paket?: string | null
+          plaka?: string
+          ruhsat_seri_no?: string | null
+          sase_no?: string | null
+          sirket_id?: string
+          updated_at?: string | null
+          vites?: string
+          yakit_tipi?: string
+          yil?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "araclar_sirket_id_fkey"
+            columns: ["sirket_id"]
+            isOneToOne: false
+            referencedRelation: "sirketler"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ayarlar: {
         Row: {
           aylik_calisma_saati: number

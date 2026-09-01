@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   ChevronLeft,
   ChevronRight,
+  Car,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/uiStore";
@@ -79,6 +80,12 @@ const NAV_GROUPS: { baslik: string; items: NavItem[] }[] = [
         etiket: "Evrak",
         ikon: FileText,
         id: "nav-evrak",
+      },
+      {
+        href: "/garaj",
+        etiket: "Garaj",
+        ikon: Car,
+        id: "nav-garaj",
       },
     ],
   },

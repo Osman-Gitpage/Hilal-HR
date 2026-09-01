@@ -73,3 +73,24 @@ export type TersaneSablonUpdate   = TablesUpdate<"tersane_sablon">;
 export type TersaneOzelBelgeRow   = Tables<"tersane_ozel_belge">;
 export type TersaneOzelBelgeInsert = TablesInsert<"tersane_ozel_belge">;
 export type TersaneOzelBelgeUpdate = TablesUpdate<"tersane_ozel_belge">;
+
+// ─── Garaj Modülü Tablo Tipleri ───────────────────────────────────────────────
+export type AracRow             = Tables<"araclar">;
+export type AracInsert          = TablesInsert<"araclar">;
+export type AracUpdate          = TablesUpdate<"araclar">;
+export type AracPoliceRow       = Tables<"arac_policeler">;
+export type AracPoliceInsert    = TablesInsert<"arac_policeler">;
+export type AracPoliceUpdate    = TablesUpdate<"arac_policeler">;
+export type AracCezaRow         = Tables<"arac_cezalar">;
+export type AracCezaInsert      = TablesInsert<"arac_cezalar">;
+export type AracCezaUpdate      = TablesUpdate<"arac_cezalar">;
+export type AracMuayeneRow      = Tables<"arac_muayene">;
+export type AracMuayeneInsert   = TablesInsert<"arac_muayene">;
+export type AracMuayeneUpdate   = TablesUpdate<"arac_muayene">;
+export type AracYakitRow        = Tables<"arac_yakit_kayitlari">;
+export type AracYakitInsert     = TablesInsert<"arac_yakit_kayitlari">;
+export type AracYakitUpdate     = TablesUpdate<"arac_yakit_kayitlari">;
+export type AracServisRow       = Tables<"arac_servis_kayitlari">;
+export type AracServisInsert    = TablesInsert<"arac_servis_kayitlari">;
+export type AracServisUpdate    = TablesUpdate<"arac_servis_kayitlari">;
+
