@@ -38,7 +38,7 @@ export async function updateSession(request: NextRequest) {
   const isOnboarding = pathname.startsWith("/onboarding");
   const isLanding = pathname.startsWith("/landing");
   const isSifreSifirla = pathname.startsWith("/sifre-sifirla") || pathname.startsWith("/sifre-guncelle");
-  const isHilalTevzi = pathname.startsWith("/hilal-tevzi") || pathname.startsWith("/pdf-form-test");
+  const isHilalTevzi = pathname.startsWith("/hilal-tevzi") || pathname.startsWith("/pdf-form-test") || pathname.startsWith("/api/manifest-tevzi");
   const isPublicRoute = pathname === "/" || isAuthRoute || isOnboarding || isLanding || isSifreSifirla || isHilalTevzi;
 
   if (!user && !isPublicRoute) {
