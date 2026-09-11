@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { saveAs } from "file-saver";
 import { PDFDocument } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
@@ -20,7 +20,8 @@ import {
   Upload, 
   ClipboardCheck,
   Send,
-  Share2
+  Share2,
+  CheckCircle2
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -63,7 +64,6 @@ interface WorkAreaGroup {
 }
 
 export default function HilalTevziPage() {
-  // Bugünün tarihini GG.AA.YYYY formatında al
   const getTodayFormatted = () => {
     const today = new Date();
     const day = String(today.getDate()).padStart(2, "0");
@@ -82,7 +82,7 @@ export default function HilalTevziPage() {
   const [newPersonName, setNewPersonName] = useState<string>("");
   const [selectedPersons, setSelectedPersons] = useState<string[]>([]);
 
-  // Görevler: { "Abdulkadir Turan": "Karkas Yapımı", ... }
+  // Görevler
   const [personTasks, setPersonTasks] = useState<Record<string, string>>({});
 
   // Çalışma Alanı Grupları
@@ -90,12 +90,39 @@ export default function HilalTevziPage() {
     { id: "1", name: "", assignedPersons: [] },
   ]);
 
-  // PDF İşlemleri
+  // Önceden Hazırlanmış PDF & Varlık Önbelleği (iOS Safari 0ms Share için)
+  const cachedTemplateBytesRef = useRef<ArrayBuffer | null>(null);
+  const cachedFontBytesRef = useRef<ArrayBuffer | null>(null);
+  const [prebuiltPdfFile, setPrebuiltPdfFile] = useState<File | null>(null);
+  const [isPrebuilding, setIsPrebuilding] = useState<boolean>(false);
+
   const [pdfLoading, setPdfLoading] = useState<boolean>(false);
   const [loadingText, setLoadingText] = useState<string>("");
   const [customPdfFile, setCustomPdfFile] = useState<File | null>(null);
   const [templateNotFound, setTemplateNotFound] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sayfa açıldığında şablon ve fontu RAM'e önden yükle
+  useEffect(() => {
+    const preloadAssets = async () => {
+      try {
+        const tplResp = await fetch("/hilal-tevzi-sablon.pdf");
+        if (tplResp.ok) {
+          cachedTemplateBytesRef.current = await tplResp.arrayBuffer();
+        }
+      } catch (e) {}
+
+      try {
+        let fontResp = await fetch("/fonts/TimesNewRoman.ttf");
+        if (!fontResp.ok) fontResp = await fetch("/fonts/Roboto.ttf");
+        if (fontResp.ok) {
+          cachedFontBytesRef.current = await fontResp.arrayBuffer();
+        }
+      } catch (e) {}
+    };
+
+    preloadAssets();
+  }, []);
 
   // 1. ADIM: Kişi Seçimi
   const togglePersonSelection = (name: string) => {
@@ -194,54 +221,46 @@ export default function HilalTevziPage() {
     return "";
   };
 
-  // PDF Hazırlama Ortak Motoru (Times New Roman Font)
-  const buildPdfBlob = async (): Promise<{ blob: Blob; fileName: string }> => {
-    let pdfBytes: ArrayBuffer | null = null;
+  // PDF Oluşturma Çekirdeği
+  const generatePdfInstance = async (): Promise<File> => {
+    let pdfBytes = customPdfFile ? await customPdfFile.arrayBuffer() : cachedTemplateBytesRef.current;
 
-    if (customPdfFile) {
-      pdfBytes = await customPdfFile.arrayBuffer();
-    } else {
+    if (!pdfBytes) {
       try {
-        const response = await fetch("/hilal-tevzi-sablon.pdf");
-        if (response.ok) {
-          pdfBytes = await response.arrayBuffer();
-        } else {
-          const altResp = await fetch("/hilal-sablon.pdf");
-          if (altResp.ok) {
-            pdfBytes = await altResp.arrayBuffer();
-          } else {
-            throw new Error("Şablon bulunamadı.");
-          }
+        const resp = await fetch("/hilal-tevzi-sablon.pdf");
+        if (resp.ok) {
+          pdfBytes = await resp.arrayBuffer();
+          cachedTemplateBytesRef.current = pdfBytes;
         }
-      } catch (fetchErr) {
-        setTemplateNotFound(true);
-        throw new Error("public/hilal-tevzi-sablon.pdf dosyası bulunamadı. Lütfen şablonu manuel seçin.");
-      }
+      } catch (e) {}
     }
 
     if (!pdfBytes) {
-      throw new Error("PDF dosyası okunamadı.");
+      setTemplateNotFound(true);
+      throw new Error("Şablon PDF dosyası bulunamadı.");
     }
 
-    setLoadingText("Times New Roman Yazı Tipi Yükleniyor...");
+    let fontBytes = cachedFontBytesRef.current;
+    if (!fontBytes) {
+      try {
+        const fResp = await fetch("/fonts/TimesNewRoman.ttf");
+        if (fResp.ok) {
+          fontBytes = await fResp.arrayBuffer();
+          cachedFontBytesRef.current = fontBytes;
+        }
+      } catch (e) {}
+    }
+
     const pdfDoc = await PDFDocument.load(pdfBytes);
     pdfDoc.registerFontkit(fontkit);
 
     let customFont: any = null;
-    try {
-      let fontResponse = await fetch("/fonts/TimesNewRoman.ttf");
-      if (!fontResponse.ok) {
-        fontResponse = await fetch("/fonts/Roboto.ttf");
-      }
-      if (fontResponse.ok) {
-        const fontBytes = await fontResponse.arrayBuffer();
+    if (fontBytes) {
+      try {
         customFont = await pdfDoc.embedFont(fontBytes);
-      }
-    } catch (fErr) {
-      console.warn("Font yüklenemedi:", fErr);
+      } catch (e) {}
     }
 
-    setLoadingText("Form Alanları Dolduruluyor...");
     const form = pdfDoc.getForm();
 
     // Tarih
@@ -260,7 +279,6 @@ export default function HilalTevziPage() {
       const task = person ? (personTasks[person] || "") : "";
       const area = person ? (getPersonArea(person) === "—" ? "" : getPersonArea(person)) : "";
 
-      // Ad Soyad
       try {
         const adSoyadField = form.getTextField(`ad_soyad_${i}`);
         if (adSoyadField) {
@@ -269,7 +287,6 @@ export default function HilalTevziPage() {
         }
       } catch (e) {}
 
-      // Görevi
       try {
         const gorevField = form.getTextField(`gorev_${i}`);
         if (gorevField) {
@@ -278,7 +295,6 @@ export default function HilalTevziPage() {
         }
       } catch (e) {}
 
-      // Çalışma Alanı
       try {
         const calismaAlaniField = form.getTextField(`calisma_alani_${i}`);
         if (calismaAlaniField) {
@@ -288,76 +304,77 @@ export default function HilalTevziPage() {
       } catch (e) {}
     }
 
-    setLoadingText("PDF Tamamlanıyor...");
     form.flatten({ updateFieldAppearances: false });
-
     const savedBytes = await pdfDoc.save({ updateFieldAppearances: false });
     const blob = new Blob([savedBytes as any], { type: "application/pdf" });
 
     const cleanDate = docDate ? docDate.replace(/[/\\?%*:|"<>]/g, ".") : "tarihsiz";
     const fileName = `Hilal ${cleanDate}.pdf`;
 
-    return { blob, fileName };
+    return new File([blob], fileName, { type: "application/pdf" });
   };
 
-  // 4. ADIM: Mail Uygulaması ile Ekte PDF Gönderme
+  // 4. Adıma (Özet) geçildiğinde PDF'i arka planda HEMEN oluşturup RAM'e koy (iOS Gesture Delay Sıfırlama)
+  useEffect(() => {
+    if (currentStep === 4 && selectedPersons.length > 0) {
+      setIsPrebuilding(true);
+      generatePdfInstance()
+        .then((file) => {
+          setPrebuiltPdfFile(file);
+        })
+        .catch((err) => {
+          console.warn("Ön PDF oluşturma hatası:", err);
+        })
+        .finally(() => {
+          setIsPrebuilding(false);
+        });
+    }
+  }, [currentStep, selectedPersons, personTasks, workAreas, docDate]);
+
+  // 4. ADIM: Mail / Gmail ile Gönder (Anında Senkron Tetikleme)
   const handleSendViaEmailApp = async () => {
     if (selectedPersons.length === 0) {
       toast.error("Lütfen en az bir personel seçin.");
       return;
     }
 
-    setPdfLoading(true);
-    setLoadingText("PDF Hazırlanıyor...");
+    const emailSubject = `Hilal Tevzi Listesi - ${docDate}`;
+    const emailBody = `Merhaba,\n\nHilal ${docDate} tarihli günlük tevzi listesi ekte yer almaktadır.\n\nİyi çalışmalar.`;
 
-    try {
-      const { blob, fileName } = await buildPdfBlob();
-      const pdfFile = new File([blob], fileName, { type: "application/pdf" });
+    // 1. Eğer önceden hazırlanmış PDF hazırsa (iOS Safari kullanıcı dokunma süresi aşılmadan anında çalışır)
+    const targetFile = prebuiltPdfFile || (await generatePdfInstance());
 
-      const emailSubject = `Hilal Tevzi Listesi - ${docDate}`;
-      const emailBody = `Merhaba,\n\nHilal ${docDate} tarihli günlük tevzi listesi ekte yer almaktadır.\n\nİyi çalışmalar.`;
-
-      // 1. Modern iOS / Android Mobil Paylaşım API'si (Gmail, Mail vb. bellek içi ekli dosya aktarımı)
-      if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-        setPdfLoading(false);
-        try {
-          await navigator.share({
-            files: [pdfFile],
-            title: emailSubject,
-            text: `${emailBody}\n\nAlıcı: ${recipientEmail}`,
-          });
-          return;
-        } catch (shareErr: any) {
-          if (shareErr.name === "AbortError") {
-            return;
-          }
-          console.warn("Paylaşım API hatası:", shareErr);
-          toast.error("Paylaşım başlatılamadı: " + (shareErr.message || "Bilinmeyen hata"));
+    if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [targetFile] })) {
+      try {
+        await navigator.share({
+          files: [targetFile],
+          title: emailSubject,
+          text: `${emailBody}\n\nAlıcı: ${recipientEmail}`,
+        });
+        return;
+      } catch (shareErr: any) {
+        if (shareErr.name === "AbortError") {
           return;
         }
+        console.warn("Paylaşım hatası:", shareErr);
       }
-
-      // Canlıda (HTTPS) olmadığında veya desteklenmediğinde uyarı göster
-      toast.warning("iOS Safari, HTTP (yerel IP) bağlantısında Gmail aktarımını kısıtlar. Proje canlıya (HTTPS) alındığında doğrudan indirmeden Gmail açılacaktır.");
-
-      toast.success("PDF cihazınıza indirildi ve Mail uygulamanız açıldı. İndirilen PDF'i ekleyip gönderebilirsiniz!");
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err.message || "İşlem sırasında hata oluştu.");
-    } finally {
-      setPdfLoading(false);
-      setLoadingText("");
     }
+
+    // 2. Güvensiz HTTP veya masaüstü ortamındaysa alternatif
+    saveAs(targetFile, targetFile.name);
+    const mailtoUrl = `mailto:${encodeURIComponent(recipientEmail)}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+    window.location.href = mailtoUrl;
+    toast.info("PDF indirildi ve Mail açıldı.");
   };
 
-  // İsteğe bağlı doğrudan sadece PDF indirmek isteyenler için
+  // Sadece İndir
   const handleOnlyDownload = async () => {
     setPdfLoading(true);
     setLoadingText("PDF İndiriliyor...");
     try {
-      const { blob, fileName } = await buildPdfBlob();
-      saveAs(blob, fileName);
-      toast.success(`${fileName} indirildi!`);
+      const file = prebuiltPdfFile || (await generatePdfInstance());
+      saveAs(file, file.name);
+      toast.success(`${file.name} indirildi!`);
     } catch (err: any) {
       toast.error(err.message || "Hata oluştu.");
     } finally {
@@ -415,7 +432,7 @@ export default function HilalTevziPage() {
               </div>
               <div>
                 <h1 className="text-sm font-bold text-slate-900 leading-tight">Hilal Tevzi Formu</h1>
-                <p className="text-[11px] text-slate-500">Günlük Personel & Görev Dağılımı</p>
+                <p className="text-[11px] text-slate-500">Günlük Personel Dağılımı</p>
               </div>
             </div>
 
@@ -755,7 +772,7 @@ export default function HilalTevziPage() {
                 Tevzi Listesi Özeti
               </h2>
               <p className="text-xs text-slate-500">
-                PDF ekli olarak mail uygulamanız üzerinden gönderilecektir
+                PDF dosyanız hazırlandı. Aşağıdan doğrudan Gmail/Mail ile gönderebilirsiniz.
               </p>
             </div>
 
@@ -763,7 +780,7 @@ export default function HilalTevziPage() {
             <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs space-y-1.5">
               <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
                 <Mail className="size-3.5 text-slate-500" />
-                Gönderilecek E-posta Adresi
+                Alıcı E-posta Adresi
               </label>
               <input
                 type="email"
@@ -836,10 +853,10 @@ export default function HilalTevziPage() {
               })}
             </div>
 
-            {/* Dosya Adı ve İndirme Seçeneği */}
+            {/* Ek Dosya & İndirme Seçeneği */}
             <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between shadow-xs">
               <div className="text-xs text-slate-600">
-                Ek Dosya: <strong className="text-slate-900 font-mono">Hilal {docDate}.pdf</strong>
+                PDF: <strong className="text-slate-900 font-mono">Hilal {docDate}.pdf</strong>
               </div>
               <button
                 type="button"
@@ -847,7 +864,7 @@ export default function HilalTevziPage() {
                 className="text-xs font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1 underline underline-offset-2"
               >
                 <FileDown className="size-3.5" />
-                Sadece İndir
+                Dosyayı İndir
               </button>
             </div>
           </div>
@@ -881,11 +898,11 @@ export default function HilalTevziPage() {
             <button
               type="button"
               onClick={handleSendViaEmailApp}
-              disabled={pdfLoading || selectedPersons.length === 0}
+              disabled={selectedPersons.length === 0}
               className="flex-1 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-bold h-11 rounded-xl shadow-sm active:scale-98 transition flex items-center justify-center gap-2 cursor-pointer"
             >
               <Send className="size-4" />
-              <span>Mail ile Gönder</span>
+              <span>Gmail / Mail ile Gönder</span>
             </button>
           )}
         </div>
