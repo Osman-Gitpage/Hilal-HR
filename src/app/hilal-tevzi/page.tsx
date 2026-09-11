@@ -338,8 +338,9 @@ export default function HilalTevziPage() {
       return;
     }
 
-    const emailSubject = `Hilal Tevzi Listesi - ${docDate}`;
-    const emailBody = `Merhaba,\n\nHilal ${docDate} tarihli günlük tevzi listesi ekte yer almaktadır.\n\nİyi çalışmalar.`;
+    const cleanSlashDate = docDate.replace(/\./g, "/");
+    const emailSubject = `Hilal Tevzi ${cleanSlashDate}`;
+    const emailBody = `Merhaba İyi Çalışmalar \n\n${docDate} Tarihli Tevzi Ektedir.\n\nSaygılarımızla\nHilal İzolasyon Ltd. Şti.\n0537 426 42 99`;
 
     // 1. Eğer önceden hazırlanmış PDF hazırsa (iOS Safari kullanıcı dokunma süresi aşılmadan anında çalışır)
     const targetFile = prebuiltPdfFile || (await generatePdfInstance());
@@ -349,7 +350,7 @@ export default function HilalTevziPage() {
         await navigator.share({
           files: [targetFile],
           title: emailSubject,
-          text: `${emailBody}\n\nAlıcı: ${recipientEmail}`,
+          text: emailBody,
         });
         return;
       } catch (shareErr: any) {
@@ -362,7 +363,7 @@ export default function HilalTevziPage() {
 
     // 2. Güvensiz HTTP veya masaüstü ortamındaysa alternatif
     saveAs(targetFile, targetFile.name);
-    const mailtoUrl = `mailto:${encodeURIComponent(recipientEmail)}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+    const mailtoUrl = `mailto:?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
     window.location.href = mailtoUrl;
     toast.info("PDF indirildi ve Mail açıldı.");
   };
@@ -772,23 +773,8 @@ export default function HilalTevziPage() {
                 Tevzi Listesi Özeti
               </h2>
               <p className="text-xs text-slate-500">
-                PDF dosyanız hazırlandı. Aşağıdan doğrudan Gmail/Mail ile gönderebilirsiniz.
+                Seçilen {selectedPersons.length} personel için tevzi listesi hazırlandı
               </p>
-            </div>
-
-            {/* Gönderilecek Mail Adresi Kartı */}
-            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                <Mail className="size-3.5 text-slate-500" />
-                Alıcı E-posta Adresi
-              </label>
-              <input
-                type="email"
-                value={recipientEmail}
-                onChange={(e) => setRecipientEmail(e.target.value)}
-                placeholder="edgetr55@gmail.com"
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-slate-400 focus:bg-white transition"
-              />
             </div>
 
             {templateNotFound && (
@@ -851,21 +837,6 @@ export default function HilalTevziPage() {
                   </div>
                 );
               })}
-            </div>
-
-            {/* Ek Dosya & İndirme Seçeneği */}
-            <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between shadow-xs">
-              <div className="text-xs text-slate-600">
-                PDF: <strong className="text-slate-900 font-mono">Hilal {docDate}.pdf</strong>
-              </div>
-              <button
-                type="button"
-                onClick={handleOnlyDownload}
-                className="text-xs font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1 underline underline-offset-2"
-              >
-                <FileDown className="size-3.5" />
-                Dosyayı İndir
-              </button>
             </div>
           </div>
         )}
