@@ -316,6 +316,8 @@ export type Database = {
           plaka: string
           ruhsat_seri_no: string | null
           sase_no: string | null
+          ruhsat_belge_url: string | null
+          ruhsat_belge_adi: string | null
           sirket_id: string
           updated_at: string | null
           vites: string
@@ -335,6 +337,8 @@ export type Database = {
           plaka: string
           ruhsat_seri_no?: string | null
           sase_no?: string | null
+          ruhsat_belge_url?: string | null
+          ruhsat_belge_adi?: string | null
           sirket_id: string
           updated_at?: string | null
           vites: string
@@ -354,6 +358,8 @@ export type Database = {
           plaka?: string
           ruhsat_seri_no?: string | null
           sase_no?: string | null
+          ruhsat_belge_url?: string | null
+          ruhsat_belge_adi?: string | null
           sirket_id?: string
           updated_at?: string | null
           vites?: string

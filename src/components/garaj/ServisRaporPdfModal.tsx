@@ -17,7 +17,7 @@ interface ServisRaporPdfModalProps {
   arac: Arac;
   secilenYil: number;
   servisKayitlari: ServisKaydi[];
-  muayene: MuayeneBilgileri;
+  muayene?: MuayeneBilgileri;
 }
 
 export function ServisRaporPdfModal({
@@ -31,7 +31,7 @@ export function ServisRaporPdfModal({
   const printAreaRef = useRef<HTMLDivElement>(null);
 
   const toplamServisTutar = servisKayitlari.reduce((acc, s) => acc + (s.tutar || 0), 0);
-  const muayeneMasrafi = secilenYil === 2026 ? (muayene.muayeneUcreti || 0) : 0;
+  const muayeneMasrafi = secilenYil === 2026 ? (muayene?.muayeneUcreti || 0) : 0;
   const genelToplamTutar = toplamServisTutar + muayeneMasrafi;
   const toplamIslemSayisi = servisKayitlari.length + (muayeneMasrafi > 0 ? 1 : 0);
 
@@ -244,7 +244,7 @@ export function ServisRaporPdfModal({
                   </thead>
                   <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 font-medium">
                     {/* TÜVTÜRK Muayene */}
-                    {secilenYil === 2026 && muayene.muayeneUcreti && (
+                    {secilenYil === 2026 && muayene?.muayeneUcreti && (
                       <tr className="bg-indigo-50/20">
                         <td className="py-3 px-4 font-bold text-zinc-900 dark:text-zinc-100">
                           <div>{muayene.muayeneTarihi}</div>
@@ -265,7 +265,7 @@ export function ServisRaporPdfModal({
                       </tr>
                     )}
 
-                    {servisKayitlari.length === 0 && (!muayene.muayeneUcreti || secilenYil !== 2026) ? (
+                    {servisKayitlari.length === 0 && (!muayene?.muayeneUcreti || secilenYil !== 2026) ? (
                       <tr>
                         <td colSpan={5} className="py-6 text-center text-zinc-400">
                           {secilenYil} yılına ait servis masraf kaydı bulunamadı.

@@ -94,12 +94,26 @@ export function LoginForm() {
           </div>
         </div>
 
+        {/* Beni Hatırla */}
+        <div className="flex items-center gap-2">
+          <input
+            id="rememberMe"
+            name="rememberMe"
+            type="checkbox"
+            defaultChecked={true}
+            className="size-4 rounded border-zinc-800 bg-zinc-900 text-amber-500 focus:ring-0 focus:ring-offset-0 cursor-pointer accent-white"
+          />
+          <label htmlFor="rememberMe" className="text-xs text-zinc-400 select-none cursor-pointer">
+            Beni Hatırla (Oturumu açık tut)
+          </label>
+        </div>
+
         {/* Submit */}
         <button
           id="btn-giris"
           type="submit"
           disabled={yukleniyor}
-          className="w-full bg-white text-zinc-950 font-semibold py-2.5 rounded-xl text-sm hover:bg-zinc-100 transition-all duration-200 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-1"
+          className="w-full bg-white text-zinc-950 font-semibold py-2.5 rounded-xl text-sm hover:bg-zinc-100 transition-all duration-200 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-1 cursor-pointer"
         >
           {yukleniyor ? (
             <>

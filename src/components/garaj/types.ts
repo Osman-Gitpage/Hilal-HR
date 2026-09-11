@@ -13,6 +13,8 @@ export interface RuhsatBilgileri {
   ruhsatSeriNo: string;
   motorNo: string;
   saseNo: string;
+  belgeUrl?: string;
+  belgeAdi?: string;
 }
 
 export interface AylikTuketim {

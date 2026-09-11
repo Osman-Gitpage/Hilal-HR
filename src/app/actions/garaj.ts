@@ -1,6 +1,7 @@
 "use server";
 
 import { getAuthContext } from "@/lib/auth/context";
+import { createAdminClient } from "@/supabase/admin";
 import { revalidatePath } from "next/cache";
 import {
   Arac,
@@ -52,6 +53,8 @@ export async function aracListesiGetir(): Promise<Arac[]> {
       ruhsatSeriNo: r.ruhsat_seri_no || "",
       motorNo: r.motor_no || "",
       saseNo: r.sase_no || "",
+      belgeUrl: r.ruhsat_belge_url || undefined,
+      belgeAdi: r.ruhsat_belge_adi || undefined,
     },
   }));
 }
@@ -121,15 +124,7 @@ export async function aracDetayGetir(aracId: string): Promise<Arac | null> {
     .eq("sirket_id", sirketId)
     .single();
 
-  let muayene: MuayeneBilgileri = {
-    muayeneTarihi: "18.06.2026",
-    kalanGun: 126,
-    muayeneUcreti: 2620,
-    istasyon: "TÜVTÜRK Maslak İstasyonu",
-    raporNo: "TUV-2024-991840",
-    sonuc: "Kusursuz Geçti",
-    egzozEmisyonTarihi: "18.06.2026",
-  };
+  let muayene: MuayeneBilgileri | undefined = undefined;
 
   if (muayeneRow) {
     const bitis = new Date(muayeneRow.muayene_tarihi);
@@ -207,6 +202,8 @@ export async function aracDetayGetir(aracId: string): Promise<Arac | null> {
       ruhsatSeriNo: aracRow.ruhsat_seri_no || "",
       motorNo: aracRow.motor_no || "",
       saseNo: aracRow.sase_no || "",
+      belgeUrl: aracRow.ruhsat_belge_url || undefined,
+      belgeAdi: aracRow.ruhsat_belge_adi || undefined,
     },
     policeler,
     cezalar,
@@ -234,6 +231,8 @@ export async function aracEkleAction(payload: {
   ruhsatSeriNo?: string;
   motorNo?: string;
   saseNo?: string;
+  ruhsatBelgeUrl?: string;
+  ruhsatBelgeAdi?: string;
 }): Promise<ActionResult<{ id: string }>> {
   try {
     const { supabase, sirketId } = await getAuthContext();
@@ -255,6 +254,8 @@ export async function aracEkleAction(payload: {
         ruhsat_seri_no: payload.ruhsatSeriNo || null,
         motor_no: payload.motorNo || null,
         sase_no: payload.saseNo || null,
+        ruhsat_belge_url: payload.ruhsatBelgeUrl || null,
+        ruhsat_belge_adi: payload.ruhsatBelgeAdi || null,
       })
       .select("id")
       .single();
@@ -292,6 +293,8 @@ export async function aracGuncelleAction(
     if (payload.ruhsat?.ruhsatSeriNo !== undefined) updateData.ruhsat_seri_no = payload.ruhsat.ruhsatSeriNo;
     if (payload.ruhsat?.motorNo !== undefined) updateData.motor_no = payload.ruhsat.motorNo;
     if (payload.ruhsat?.saseNo !== undefined) updateData.sase_no = payload.ruhsat.saseNo;
+    if (payload.ruhsat?.belgeUrl !== undefined) updateData.ruhsat_belge_url = payload.ruhsat.belgeUrl;
+    if (payload.ruhsat?.belgeAdi !== undefined) updateData.ruhsat_belge_adi = payload.ruhsat.belgeAdi;
 
     const { error } = await supabase
       .from("araclar")
@@ -612,7 +615,8 @@ export async function garajDosyaYukleAction(
   formData: FormData
 ): Promise<ActionResult<{ url: string; dosyaAdi: string }>> {
   try {
-    const { supabase, sirketId } = await getAuthContext();
+    const { sirketId } = await getAuthContext();
+    const adminClient = createAdminClient();
 
     const file = formData.get("file") as File;
     if (!file) throw new Error("Dosya bulunamadı.");
@@ -621,7 +625,7 @@ export async function garajDosyaYukleAction(
     const fileExt = dosyaAdi.split(".").pop();
     const safeName = `${sirketId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
 
-    const { error: uploadErr } = await supabase.storage
+    const { error: uploadErr } = await adminClient.storage
       .from("garaj-evraklar")
       .upload(safeName, file, {
         cacheControl: "3600",
@@ -630,7 +634,7 @@ export async function garajDosyaYukleAction(
 
     if (uploadErr) throw new Error(uploadErr.message);
 
-    const { data: urlData } = supabase.storage
+    const { data: urlData } = adminClient.storage
       .from("garaj-evraklar")
       .getPublicUrl(safeName);
 
@@ -645,3 +649,82 @@ export async function garajDosyaYukleAction(
     return { basarili: false, hata: err.message || "Dosya yüklenemedi." };
   }
 }
+
+/** Araç fotoğrafı/görseli yükleme server action */
+export async function garajGorselYukleAction(
+  formData: FormData
+): Promise<ActionResult<{ url: string; dosyaAdi: string }>> {
+  try {
+    const { sirketId } = await getAuthContext();
+    const adminClient = createAdminClient();
+
+    const file = formData.get("file") as File;
+    if (!file) throw new Error("Görsel dosyası bulunamadı.");
+
+    if (!file.type.startsWith("image/")) {
+      throw new Error("Lütfen geçerli bir görsel dosyası seçiniz (PNG, JPG, WEBP).");
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error("Görsel boyutu maksimum 10MB olabilir.");
+    }
+
+    const dosyaAdi = file.name;
+    const fileExt = dosyaAdi.split(".").pop() || "jpg";
+    const safeName = `${sirketId}/araclar/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+    const { error: uploadErr } = await adminClient.storage
+      .from("garaj-evraklar")
+      .upload(safeName, file, {
+        cacheControl: "3600",
+        upsert: true,
+      });
+
+    if (uploadErr) throw new Error(uploadErr.message);
+
+    const { data: urlData } = adminClient.storage
+      .from("garaj-evraklar")
+      .getPublicUrl(safeName);
+
+    return {
+      basarili: true,
+      veri: {
+        url: urlData.publicUrl,
+        dosyaAdi,
+      },
+    };
+  } catch (err: any) {
+    return { basarili: false, hata: err.message || "Görsel yüklenemedi." };
+  }
+}
+
+/** Araç ruhsat belgesi görselini/PDF'ini güncelleme veya kaldırma action */
+export async function ruhsatBelgesiGuncelleAction(
+  aracId: string,
+  belgeUrl: string | null,
+  belgeAdi: string | null
+): Promise<ActionResult> {
+  try {
+    const { supabase, sirketId } = await getAuthContext();
+
+    const { error } = await supabase
+      .from("araclar")
+      .update({
+        ruhsat_belge_url: belgeUrl,
+        ruhsat_belge_adi: belgeAdi,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", aracId)
+      .eq("sirket_id", sirketId);
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/garaj");
+    revalidatePath(`/garaj/${aracId}`);
+    return { basarili: true };
+  } catch (err: any) {
+    return { basarili: false, hata: err.message || "Ruhsat belgesi güncellenemedi." };
+  }
+}
+
+

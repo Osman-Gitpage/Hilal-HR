@@ -28,6 +28,8 @@ import {
   Settings2,
   ChevronLeft,
   ChevronRight,
+  Upload,
+  Check,
 } from "lucide-react";
 import {
   Select,
@@ -36,6 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import {
   Arac,
   Police,
@@ -117,15 +120,7 @@ export function GarajDetayEkrani({ arac }: GarajDetayEkraniProps) {
   // Canlı Veri Listeleri
   const policeler = arac.policeler || [];
   const cezalar = arac.cezalar || [];
-  const muayene = arac.muayene || {
-    muayeneTarihi: "18.06.2026",
-    kalanGun: 126,
-    muayeneUcreti: 2620,
-    istasyon: "TÜVTÜRK Maslak İstasyonu",
-    raporNo: "TUV-2024-991840",
-    sonuc: "Kusursuz Geçti",
-    egzozEmisyonTarihi: "18.06.2026",
-  };
+  const muayene = arac.muayene;
 
   const tumYakitlar = arac.yakitKayitlari || [];
   const tumServisler = arac.servisKayitlari || [];
@@ -145,10 +140,11 @@ export function GarajDetayEkrani({ arac }: GarajDetayEkraniProps) {
     () => cezalar.reduce((acc, c) => acc + (c.tutar || 0), 0),
     [cezalar]
   );
-  const toplamYakitMiktar = useMemo(
+  const yillikTuketimLitre = useMemo(
     () => yillikYakitlar.reduce((acc, y) => acc + (y.miktar || 0), 0),
     [yillikYakitlar]
   );
+  const toplamYakitMiktar = yillikTuketimLitre;
   const toplamYakitTutar = useMemo(
     () => yillikYakitlar.reduce((acc, y) => acc + (y.toplamTutar || 0), 0),
     [yillikYakitlar]
@@ -159,7 +155,7 @@ export function GarajDetayEkrani({ arac }: GarajDetayEkraniProps) {
   );
 
   // TÜVTÜRK Muayene masrafı (O yıla aitse toplama eklenir)
-  const muayeneMasrafi = secilenYil === 2026 ? (muayene.muayeneUcreti || 0) : 0;
+  const muayeneMasrafi = secilenYil === 2026 ? (muayene?.muayeneUcreti || 0) : 0;
   const yillikGenelToplamGider = toplamYakitTutar + toplamServisTutar + muayeneMasrafi;
 
   // 15 Satır Sayfalama Dilimleri
@@ -182,20 +178,33 @@ export function GarajDetayEkrani({ arac }: GarajDetayEkraniProps) {
     [policeler]
   );
 
-  // 2. Son 3 Ay Yakıt Verisi
+  // 2. Son 3 Ay Yakıt Verisi (Şu anki aydan önceki 3 ay)
   const son3AyYakitlar = useMemo(() => {
-    if (yillikYakitlar.length > 0) {
-      return yillikYakitlar.slice(0, 3).map((y) => ({
-        ay: y.ay,
-        miktar: `${y.miktar} ${arac.yakitTipi === "Elektrik" ? "kWh" : "LT"}`,
-      }));
-    }
-    return [
-      { ay: "Ocak", miktar: "0 LT" },
-      { ay: "Şubat", miktar: "0 LT" },
-      { ay: "Mart", miktar: "0 LT" },
+    const AYLAR_ISIMLERI = [
+      "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+      "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
     ];
-  }, [yillikYakitlar, arac.yakitTipi]);
+    const bugun = new Date();
+    const birim = arac.yakitTipi === "Elektrik" ? "kWh" : "LT";
+
+    // Şu anki aydan önceki 3 ayı geriye doğru sıralı hesapla (3 ay önce -> 2 ay önce -> 1 ay önce)
+    return [3, 2, 1].map((ayGeri) => {
+      const d = new Date(bugun.getFullYear(), bugun.getMonth() - ayGeri, 1);
+      const ayAdi = AYLAR_ISIMLERI[d.getMonth()];
+      const yil = d.getFullYear();
+
+      // Tüm yakıt kayıtlarından bu ay ve yıla ait kayıtları bul
+      const ayinKayitlari = tumYakitlar.filter(
+        (y) => y.yil === yil && y.ay.toLowerCase() === ayAdi.toLowerCase()
+      );
+      const toplamMiktar = ayinKayitlari.reduce((acc, y) => acc + (y.miktar || 0), 0);
+
+      return {
+        ay: yil === bugun.getFullYear() ? ayAdi : `${ayAdi} ${yil}`,
+        miktar: `${toplamMiktar > 0 ? toplamMiktar.toLocaleString("tr-TR") : "0"} ${birim}`,
+      };
+    });
+  }, [tumYakitlar, arac.yakitTipi]);
 
   // Silme Aksiyonları
   const handlePoliceSil = async (policeId: string) => {
@@ -503,20 +512,30 @@ export function GarajDetayEkrani({ arac }: GarajDetayEkraniProps) {
                           TÜVTÜRK Muayene
                         </p>
                         <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
-                          Son tarih: {muayene.muayeneTarihi}
+                          {muayene ? `Son tarih: ${muayene.muayeneTarihi}` : "Kayıt Girilmedi"}
                         </p>
                       </div>
                     </div>
-                    <span
-                      className={cn(
-                        "font-bold text-xs tracking-tight",
-                        muayene.kalanGun < 90
-                          ? "text-amber-600 dark:text-amber-400"
-                          : "text-emerald-600 dark:text-emerald-400"
-                      )}
-                    >
-                      {muayene.kalanGun} gün
-                    </span>
+                    {muayene ? (
+                      <span
+                        className={cn(
+                          "font-bold text-xs tracking-tight",
+                          muayene.kalanGun < 90
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-emerald-600 dark:text-emerald-400"
+                        )}
+                      >
+                        {muayene.kalanGun} gün
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setMuayeneModalAcik(true)}
+                        className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
+                      >
+                        + Ekle
+                      </button>
+                    )}
                   </div>
 
                   {/* Kasko (Canlı Poliçeler Tablosu) */}
@@ -592,9 +611,19 @@ export function GarajDetayEkrani({ arac }: GarajDetayEkraniProps) {
                   <h4 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">
                     TÜVTÜRK Muayene
                   </h4>
-                  <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                    {muayene.kalanGun} gün kaldı ({muayene.muayeneTarihi})
-                  </p>
+                  {muayene ? (
+                    <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                      {muayene.kalanGun} gün kaldı ({muayene.muayeneTarihi})
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setMuayeneModalAcik(true)}
+                      className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                    >
+                      Kayıt yok • Ekle
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -740,88 +769,116 @@ export function GarajDetayEkrani({ arac }: GarajDetayEkraniProps) {
                       onClick={() => setMuayeneModalAcik(true)}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-xs font-semibold transition-colors cursor-pointer"
                     >
-                      <Settings2 className="w-3.5 h-3.5" />
-                      Güncelle
+                      {muayene ? <Settings2 className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                      {muayene ? "Güncelle" : "Ekle"}
                     </button>
                   </div>
 
                   {/* Muayene Durumu Kutusu */}
-                  <div className="space-y-3">
-                    <div className="p-3.5 rounded-2xl bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-200/50 dark:border-indigo-800/40 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-xs text-indigo-950 dark:text-indigo-200">
-                          TÜVTÜRK Periyodik Muayene
-                        </span>
-                        <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-semibold text-[10px] flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3" />
-                          {muayene.sonuc || "Kusursuz Geçti"}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                        <div>
-                          <span className="text-[9px] uppercase font-semibold text-zinc-400 block">
-                            GEÇERLİLİK TARİHİ
+                  {muayene ? (
+                    <div className="space-y-3">
+                      <div className="p-3.5 rounded-2xl bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-200/50 dark:border-indigo-800/40 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-xs text-indigo-950 dark:text-indigo-200">
+                            TÜVTÜRK Periyodik Muayene
                           </span>
-                          <span className="font-bold text-zinc-800 dark:text-zinc-200">
-                            {muayene.muayeneTarihi}
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-semibold text-[10px] flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            {muayene.sonuc || "Kusursuz Geçti"}
                           </span>
                         </div>
-                        <div className="text-right">
-                          <span className="text-[9px] uppercase font-semibold text-zinc-400 block">
-                            KALAN SÜRE
+
+                        <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                          <div>
+                            <span className="text-[9px] uppercase font-semibold text-zinc-400 block">
+                              GEÇERLİLİK TARİHİ
+                            </span>
+                            <span className="font-bold text-zinc-800 dark:text-zinc-200">
+                              {muayene.muayeneTarihi}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[9px] uppercase font-semibold text-zinc-400 block">
+                              KALAN SÜRE
+                            </span>
+                            <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                              {muayene.kalanGun} gün
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="pt-1.5 text-[10px] text-zinc-500 dark:text-zinc-400 border-t border-indigo-100/80 dark:border-indigo-900/40 flex items-center justify-between">
+                          <span>{muayene.istasyon || "TÜVTÜRK"}</span>
+                          {muayene.muayeneUcreti ? (
+                            <span className="font-bold font-mono text-indigo-900 dark:text-indigo-200">
+                              {muayene.muayeneUcreti.toLocaleString("tr-TR")} ₺
+                            </span>
+                          ) : (
+                            <span className="font-mono">{muayene.raporNo || "-"}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Egzoz Gazı Emisyon Kutusu */}
+                      <div className="p-3.5 rounded-2xl bg-[#fafafa] dark:bg-zinc-850/60 border border-zinc-200/60 dark:border-zinc-800 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300 font-semibold text-xs">
+                            <Wind className="w-3.5 h-3.5 text-zinc-500" />
+                            <span>Egzoz Gazı Emisyonu</span>
+                          </div>
+                          <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                            Geçerli
                           </span>
-                          <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                            {muayene.kalanGun} gün
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 pt-0.5">
+                          <span>Son Geçerlilik:</span>
+                          <span className="font-bold font-mono text-zinc-800 dark:text-zinc-200">
+                            {muayene.egzozEmisyonTarihi || muayene.muayeneTarihi}
                           </span>
                         </div>
                       </div>
 
-                      <div className="pt-1.5 text-[10px] text-zinc-500 dark:text-zinc-400 border-t border-indigo-100/80 dark:border-indigo-900/40 flex items-center justify-between">
-                        <span>{muayene.istasyon || "TÜVTÜRK Maslak"}</span>
-                        {muayene.muayeneUcreti ? (
-                          <span className="font-bold font-mono text-indigo-900 dark:text-indigo-200">
-                            {muayene.muayeneUcreti.toLocaleString("tr-TR")} ₺
+                      {muayene.belgeAdi && (
+                        <div className="pt-0.5">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-lg border border-indigo-200/50 dark:border-indigo-800/40">
+                            <FileText className="w-3 h-3" />
+                            {muayene.belgeAdi}
                           </span>
-                        ) : (
-                          <span className="font-mono">{muayene.raporNo || "RAP-991840"}</span>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
-
-                    {/* Egzoz Gazı Emisyon Kutusu */}
-                    <div className="p-3.5 rounded-2xl bg-[#fafafa] dark:bg-zinc-850/60 border border-zinc-200/60 dark:border-zinc-800 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300 font-semibold text-xs">
-                          <Wind className="w-3.5 h-3.5 text-zinc-500" />
-                          <span>Egzoz Gazı Emisyonu</span>
-                        </div>
-                        <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                          Geçerli
-                        </span>
+                  ) : (
+                    <div className="py-7 px-4 rounded-2xl bg-zinc-50/60 dark:bg-zinc-850/40 border border-dashed border-zinc-200 dark:border-zinc-800 text-center space-y-2.5">
+                      <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto">
+                        <Calendar className="w-5 h-5" />
                       </div>
-                      <div className="flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 pt-0.5">
-                        <span>Son Geçerlilik:</span>
-                        <span className="font-bold font-mono text-zinc-800 dark:text-zinc-200">
-                          {muayene.egzozEmisyonTarihi || muayene.muayeneTarihi}
-                        </span>
+                      <div>
+                        <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                          Muayene Kaydı Bulunmuyor
+                        </p>
+                        <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 max-w-[240px] mx-auto">
+                          Aracın TÜVTÜRK muayene ve egzoz emisyon geçerlilik tarihini tanımlayın.
+                        </p>
                       </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setMuayeneModalAcik(true)}
+                        className="rounded-xl text-xs gap-1.5 h-8 font-semibold text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Muayene Bilgisi Ekle
+                      </Button>
                     </div>
-
-                    {muayene.belgeAdi && (
-                      <div className="pt-0.5">
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-lg border border-indigo-200/50 dark:border-indigo-800/40">
-                          <FileText className="w-3 h-3" />
-                          {muayene.belgeAdi}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
 
                 <div className="text-[11px] text-zinc-400 pt-2 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between">
                   <span>Yasal Uyumluluk</span>
-                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Trafiğe Uygun</span>
+                  <span className={muayene ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-amber-600 dark:text-amber-400 font-semibold"}>
+                    {muayene ? "Trafiğe Uygun" : "Muayene Bekleniyor"}
+                  </span>
                 </div>
               </div>
 
@@ -1222,7 +1279,7 @@ export function GarajDetayEkrani({ arac }: GarajDetayEkraniProps) {
                       </thead>
                       <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/70">
                         {/* TÜVTÜRK Muayene Masrafı Satırı */}
-                        {secilenYil === 2026 && muayene.muayeneUcreti && (
+                        {secilenYil === 2026 && muayene?.muayeneUcreti && (
                           <tr className="hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors bg-indigo-50/15 dark:bg-indigo-950/10">
                             <td className="py-2.5 pr-2 font-medium text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
                               <div className="font-bold">{muayene.muayeneTarihi}</div>
@@ -1230,7 +1287,7 @@ export function GarajDetayEkrani({ arac }: GarajDetayEkraniProps) {
                             </td>
                             <td className="py-2.5 px-2 text-zinc-700 dark:text-zinc-300">
                               <p className="truncate max-w-[220px] font-medium">TÜVTÜRK Muayene & Egzoz Emisyonu</p>
-                              <span className="text-[10px] text-zinc-400">{muayene.istasyon || "TÜVTÜRK Maslak"} • {muayene.sonuc || "Kusursuz"}</span>
+                              <span className="text-[10px] text-zinc-400">{muayene.istasyon || "TÜVTÜRK"} • {muayene.sonuc || "Kusursuz"}</span>
                             </td>
                             <td className="py-2.5 pl-2 text-right font-mono font-bold text-indigo-900 dark:text-indigo-200 whitespace-nowrap">
                               {muayene.muayeneUcreti.toLocaleString("tr-TR", { minimumFractionDigits: 2 })} ₺
@@ -1242,7 +1299,7 @@ export function GarajDetayEkrani({ arac }: GarajDetayEkraniProps) {
                         )}
 
                         {/* Servis & Tamir Satırları */}
-                        {yillikServisler.length === 0 && (!muayene.muayeneUcreti || secilenYil !== 2026) ? (
+                        {yillikServisler.length === 0 && (!muayene?.muayeneUcreti || secilenYil !== 2026) ? (
                           <tr>
                             <td colSpan={4} className="py-6 text-center text-zinc-400 text-xs">
                               {secilenYil} yılına ait servis/tamir masraf kaydı bulunmuyor.
@@ -1340,7 +1397,7 @@ export function GarajDetayEkrani({ arac }: GarajDetayEkraniProps) {
 
                 <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
                   <span>Toplam: {yillikServisler.length + (muayeneMasrafi > 0 ? 1 : 0)} İşlem</span>
-                  <span>Son İşlem: {yillikServisler[0]?.tarih || muayene.muayeneTarihi}</span>
+                  <span>Son İşlem: {yillikServisler[0]?.tarih || (muayene ? muayene.muayeneTarihi : "-")}</span>
                 </div>
               </div>
             </div>
@@ -1353,6 +1410,13 @@ export function GarajDetayEkrani({ arac }: GarajDetayEkraniProps) {
         arac={arac}
         open={ruhsatModalAcik}
         onOpenChange={setRuhsatModalAcik}
+        onBelgeGuncellendi={(url, adi) => {
+          if (arac.ruhsat) {
+            arac.ruhsat.belgeUrl = url || undefined;
+            arac.ruhsat.belgeAdi = adi || undefined;
+          }
+          router.refresh();
+        }}
       />
 
       {/* ── Sigorta & Kasko Poliçesi Ekleme Modalı ── */}

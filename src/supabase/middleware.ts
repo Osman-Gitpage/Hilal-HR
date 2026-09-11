@@ -38,7 +38,8 @@ export async function updateSession(request: NextRequest) {
   const isOnboarding = pathname.startsWith("/onboarding");
   const isLanding = pathname.startsWith("/landing");
   const isSifreSifirla = pathname.startsWith("/sifre-sifirla") || pathname.startsWith("/sifre-guncelle");
-  const isPublicRoute = pathname === "/" || isAuthRoute || isOnboarding || isLanding || isSifreSifirla;
+  const isHilalTevzi = pathname.startsWith("/hilal-tevzi") || pathname.startsWith("/pdf-form-test");
+  const isPublicRoute = pathname === "/" || isAuthRoute || isOnboarding || isLanding || isSifreSifirla || isHilalTevzi;
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();

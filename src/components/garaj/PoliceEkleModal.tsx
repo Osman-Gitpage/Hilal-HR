@@ -170,6 +170,7 @@ export function PoliceEkleModal({
                 <SelectValue placeholder="Şirket Seçin" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="Hepiyi Sigorta">Hepiyi Sigorta</SelectItem>
                 <SelectItem value="Allianz Sigorta">Allianz Sigorta</SelectItem>
                 <SelectItem value="Aksigorta">Aksigorta</SelectItem>
                 <SelectItem value="Anadolu Sigorta">Anadolu Sigorta</SelectItem>
@@ -178,6 +179,9 @@ export function PoliceEkleModal({
                 <SelectItem value="Sompo Sigorta">Sompo Sigorta</SelectItem>
                 <SelectItem value="HDI Sigorta">HDI Sigorta</SelectItem>
                 <SelectItem value="Mapfre Sigorta">Mapfre Sigorta</SelectItem>
+                <SelectItem value="Quick Sigorta">Quick Sigorta</SelectItem>
+                <SelectItem value="Doğa Sigorta">Doğa Sigorta</SelectItem>
+                <SelectItem value="Neova Sigorta">Neova Sigorta</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -169,11 +169,11 @@ export const useGarajStore = create<GarajStore>()(
         const tamArac: Arac = {
           ...yeniArac,
           id,
-          policeler: DEFAULT_POLICELER,
-          cezalar: DEFAULT_CEZALAR,
-          muayene: DEFAULT_MUAYENE,
-          yakitKayitlari: DEFAULT_YAKIT_KAYITLARI,
-          servisKayitlari: DEFAULT_SERVIS_KAYITLARI,
+          policeler: [],
+          cezalar: [],
+          muayene: undefined,
+          yakitKayitlari: [],
+          servisKayitlari: [],
           toplamTuketimYil: yeniArac.toplamTuketimYil || "2026 Yılı Toplam",
           toplamTuketim: yeniArac.toplamTuketim || "1250 LT",
           aylikTuketimler: yeniArac.aylikTuketimler || [

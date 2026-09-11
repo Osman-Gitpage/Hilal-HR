@@ -44,12 +44,12 @@ export function MuayeneGuncelleModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [yukleniyor, setYukleniyor] = useState(false);
 
-  const [muayeneTarihi, setMuayeneTarihi] = useState("2026-06-18");
-  const [istasyon, setIstasyon] = useState("TÜVTÜRK Maslak İstasyonu");
-  const [raporNo, setRaporNo] = useState("TUV-2024-991840");
+  const [muayeneTarihi, setMuayeneTarihi] = useState("");
+  const [istasyon, setIstasyon] = useState("");
+  const [raporNo, setRaporNo] = useState("");
   const [sonuc, setSonuc] = useState("Kusursuz Geçti");
-  const [egzozEmisyonTarihi, setEgzozEmisyonTarihi] = useState("2026-06-18");
-  const [muayeneUcreti, setMuayeneUcreti] = useState<number | "">(2620);
+  const [egzozEmisyonTarihi, setEgzozEmisyonTarihi] = useState("");
+  const [muayeneUcreti, setMuayeneUcreti] = useState<number | "">("");
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [belgeAdi, setBelgeAdi] = useState<string>("");
@@ -65,10 +65,10 @@ export function MuayeneGuncelleModal({
         setMuayeneTarihi(mevcutMuayene.muayeneTarihi);
       }
 
-      setIstasyon(mevcutMuayene.istasyon || "TÜVTÜRK Maslak İstasyonu");
-      setRaporNo(mevcutMuayene.raporNo || "TUV-2024-991840");
+      setIstasyon(mevcutMuayene.istasyon || "");
+      setRaporNo(mevcutMuayene.raporNo || "");
       setSonuc(mevcutMuayene.sonuc || "Kusursuz Geçti");
-      setMuayeneUcreti(mevcutMuayene.muayeneUcreti ?? 2620);
+      setMuayeneUcreti(mevcutMuayene.muayeneUcreti ?? "");
 
       if (mevcutMuayene.egzozEmisyonTarihi) {
         if (mevcutMuayene.egzozEmisyonTarihi.includes(".")) {
@@ -79,8 +79,19 @@ export function MuayeneGuncelleModal({
         } else {
           setEgzozEmisyonTarihi(mevcutMuayene.egzozEmisyonTarihi);
         }
+      } else {
+        setEgzozEmisyonTarihi("");
       }
       setBelgeAdi(mevcutMuayene.belgeAdi || "");
+    } else {
+      setMuayeneTarihi("");
+      setIstasyon("");
+      setRaporNo("");
+      setSonuc("Kusursuz Geçti");
+      setEgzozEmisyonTarihi("");
+      setMuayeneUcreti("");
+      setSelectedFile(null);
+      setBelgeAdi("");
     }
   }, [mevcutMuayene, open]);
 

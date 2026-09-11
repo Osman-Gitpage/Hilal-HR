@@ -5,6 +5,7 @@ import { GarajCard } from "@/components/garaj/GarajCard";
 import { Arac } from "@/components/garaj/types";
 import { AracFormModal } from "@/components/garaj/AracFormModal";
 import { AracSilModal } from "@/components/garaj/AracSilModal";
+import { AracOnboardingModal } from "@/components/garaj/AracOnboardingModal";
 import { Button } from "@/components/ui/button";
 import { Plus, Car } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -22,6 +23,13 @@ export function GarajFiloGorunumu({ baslangicAraclar }: GarajFiloGorunumuProps) 
   const [silModalAcik, setSilModalAcik] = useState(false);
   const [silinecekArac, setSilinecekArac] = useState<Arac | null>(null);
 
+  // Yeni eklenen araç için Onboarding Sihirbazı State'i
+  const [onboardingAcik, setOnboardingAcik] = useState(false);
+  const [onboardingAracId, setOnboardingAracId] = useState("");
+  const [onboardingAracBilgi, setOnboardingAracBilgi] = useState<
+    { plaka: string; marka: string; model: string } | undefined
+  >(undefined);
+
   const handleYeniAracEkle = () => {
     setDuzenlenecekArac(null);
     setFormModalAcik(true);
@@ -37,7 +45,20 @@ export function GarajFiloGorunumu({ baslangicAraclar }: GarajFiloGorunumuProps) 
     setSilModalAcik(true);
   };
 
-  const handleBasarili = () => {
+  const handleFormBasarili = (
+    aracId: string,
+    aracBilgi?: { plaka: string; marka: string; model: string }
+  ) => {
+    router.refresh();
+    // Eğer yeni araç eklenmişse (düzenleme değilse) Onboarding sihirbazını başlat
+    if (!duzenlenecekArac && aracId) {
+      setOnboardingAracId(aracId);
+      setOnboardingAracBilgi(aracBilgi);
+      setOnboardingAcik(true);
+    }
+  };
+
+  const handleSilBasarili = () => {
     router.refresh();
   };
 
@@ -103,15 +124,26 @@ export function GarajFiloGorunumu({ baslangicAraclar }: GarajFiloGorunumuProps) 
         open={formModalAcik}
         onOpenChange={setFormModalAcik}
         duzenlenecekArac={duzenlenecekArac}
-        onBasarili={handleBasarili}
+        onBasarili={handleFormBasarili}
       />
+
+      {/* ── Zorunlu Kayıtlar Onboarding Modalı ── */}
+      {onboardingAracId && (
+        <AracOnboardingModal
+          open={onboardingAcik}
+          onOpenChange={setOnboardingAcik}
+          aracId={onboardingAracId}
+          aracBilgi={onboardingAracBilgi}
+          onTamamlandi={() => router.refresh()}
+        />
+      )}
 
       {/* ── Silme Onay Modalı ── */}
       <AracSilModal
         open={silModalAcik}
         onOpenChange={setSilModalAcik}
         arac={silinecekArac}
-        onSilindi={handleBasarili}
+        onSilindi={handleSilBasarili}
       />
     </div>
   );
