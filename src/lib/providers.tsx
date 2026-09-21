@@ -65,7 +65,7 @@ export function Providers({ children }: { children: ReactNode }) {
       <CookieConsent />
       <PwaRegister />
       <GlobalSearchDialog />
-      <Toaster position="bottom-right" richColors closeButton />
+      <Toaster position="top-right" closeButton />
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );

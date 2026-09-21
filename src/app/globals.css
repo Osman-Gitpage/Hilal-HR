@@ -160,3 +160,25 @@
     @apply font-sans;
   }
 }
+
+/* Sonner Toast Enhancements */
+[data-sonner-toaster] {
+  --toast-close-button-start: auto;
+  --toast-close-button-end: 10px;
+  --toast-close-button-transform: none;
+}
+
+[data-sonner-toast] [data-close-button] {
+  top: 10px !important;
+  right: 10px !important;
+  left: auto !important;
+  transform: none !important;
+  border-radius: 8px !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+  background: var(--accent) !important;
+  color: var(--accent-foreground) !important;
+}
