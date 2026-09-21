@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition, useState } from "react";
+import React, { useTransition, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -21,6 +21,8 @@ import {
   Trash2,
   Tag,
   TrendingUp,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ProjeAyPuantajTablosu } from "./ProjeAyPuantajTablosu";
 import {
   useProjeDetay,
   useProjeDonemLog,
@@ -237,6 +240,19 @@ function DonemTimeline({ projeId }: { projeId: string }) {
 // ─────────────────────────────────────────────
 export function ProjeDetayView({ projeId }: { projeId: string }) {
   const { data, isLoading, isError } = useProjeDetay(projeId);
+  const [acikAylar, setAcikAylar] = useState<Set<string>>(new Set());
+
+  function toggleAy(ayKey: string) {
+    setAcikAylar((prev) => {
+      const next = new Set(prev);
+      if (next.has(ayKey)) {
+        next.delete(ayKey);
+      } else {
+        next.add(ayKey);
+      }
+      return next;
+    });
+  }
 
   if (isLoading) {
     return (
@@ -351,77 +367,15 @@ export function ProjeDetayView({ projeId }: { projeId: string }) {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Sol Kolon — Dönem Logları */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Dönem Timeline */}
-          <div className="rounded-xl border bg-card p-5">
-            <DonemTimeline projeId={projeId} />
-          </div>
-
-          {/* Aylık Özet Tablosu */}
-          {aylikOzet.length > 0 && (
-            <div className="rounded-xl border bg-card overflow-hidden">
-              <div className="px-5 py-4 border-b flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                <h3 className="font-semibold text-sm">Aylık Çalışma Özeti</h3>
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Dönem</TableHead>
-                    <TableHead className="text-right">Toplam Saat</TableHead>
-                    <TableHead className="text-right">Personel</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {aylikOzet.map(({ ay, toplamSaat: ts, personelSayisi }) => (
-                    <TableRow key={ay}>
-                      <TableCell className="font-medium">{formatAy(ay)}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        <span className="font-semibold">{ts.toFixed(1)}</span>
-                        <span className="text-muted-foreground text-xs ml-1">sa</span>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        <Badge variant="outline" className="text-xs">{personelSayisi} kişi</Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+      {/* 2 Kolon: Dönem Timeline & (Fatura Kodları + Adres) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Sol Kolon — Çalışma Dönemleri */}
+        <div className="rounded-xl border bg-card p-5">
+          <DonemTimeline projeId={projeId} />
         </div>
 
-        {/* Sağ Kolon */}
+        {/* Sağ Kolon — Fatura Kodları & Adres */}
         <div className="space-y-6">
-          {/* Personeller */}
-          <div className="rounded-xl border bg-card p-5 space-y-3">
-            <h3 className="font-semibold text-sm flex items-center gap-2">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              Çalışan Personeller
-            </h3>
-            {personeller.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Henüz kayıt yok.</p>
-            ) : (
-              <div className="space-y-2">
-                {personeller.map((p: any) => (
-                  <div key={p.id} className="flex items-center gap-2.5">
-                    <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
-                      {p.ad.charAt(0)}{p.soyad.charAt(0)}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{p.ad} {p.soyad}</p>
-                      {p.gorev_unvan && (
-                        <p className="text-[11px] text-muted-foreground truncate">{p.gorev_unvan}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Fatura Kodları */}
           {faturaKodlari.length > 0 && (
             <div className="rounded-xl border bg-card p-5 space-y-3">
@@ -454,6 +408,101 @@ export function ProjeDetayView({ projeId }: { projeId: string }) {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Aylık Çalışma Özeti — Tam Genişlik ve Tıklanınca Altında Açılan Puantaj */}
+      <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="px-5 py-4 border-b flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-primary" />
+            <h3 className="font-semibold text-sm">Aylık Çalışma Özeti</h3>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            Dönem satırına tıklayarak o döneme ait puantaj tablosunu açıp kapatabilirsiniz
+          </span>
+        </div>
+
+        {aylikOzet.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground text-sm">
+            Bu projeye ait henüz aylık puantaj kaydı bulunmuyor.
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/30">
+                <TableHead className="w-10"></TableHead>
+                <TableHead>Dönem</TableHead>
+                <TableHead className="text-right">Toplam Saat</TableHead>
+                <TableHead className="text-right">Personel</TableHead>
+                <TableHead className="text-right w-36">İşlem</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {aylikOzet.map(({ ay, toplamSaat: ts, personelSayisi }) => {
+                const [yilStr, ayStr] = ay.split("-");
+                const yilNum = parseInt(yilStr, 10);
+                const ayNum = parseInt(ayStr, 10);
+                const isAcik = acikAylar.has(ay);
+
+                return (
+                  <React.Fragment key={ay}>
+                    <TableRow
+                      className="cursor-pointer hover:bg-muted/40 transition-colors select-none"
+                      onClick={() => toggleAy(ay)}
+                    >
+                      <TableCell className="w-10 text-muted-foreground">
+                        {isAcik ? (
+                          <ChevronUp className="h-4 w-4 text-primary" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        {formatAy(ay)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        <span className="font-bold text-foreground">{ts.toFixed(1)}</span>
+                        <span className="text-muted-foreground text-xs ml-1">sa</span>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        <Badge variant="outline" className="text-xs font-normal">
+                          {personelSayisi} kişi
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs gap-1 text-primary hover:text-primary hover:bg-primary/10"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleAy(ay);
+                          }}
+                        >
+                          {isAcik ? "Puantajı Kapat" : "Puantajı Aç"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+
+                    {/* Akordeon Açıldığında Altında Puantaj Tablosu */}
+                    {isAcik && (
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={5} className="p-0 border-b-2">
+                          <ProjeAyPuantajTablosu
+                            projeId={projeId}
+                            projeAdi={proje.ad}
+                            yil={yilNum}
+                            ay={ayNum}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
       </div>
     </div>
   );

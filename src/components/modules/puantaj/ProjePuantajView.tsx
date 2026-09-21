@@ -104,7 +104,7 @@ function DonemSecici() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Hücre — Genel Puantaj ile aynı stil (özel durum badge + saat)
 // ─────────────────────────────────────────────────────────────────────────────
-interface HucreDurumu {
+export interface HucreDurumu {
   giris_saati?: string | null;
   cikis_saati?: string | null;
   calisma_saati?: number | null;
@@ -114,7 +114,7 @@ interface HucreDurumu {
   saat?: number | null; // puantaj_proje'den
 }
 
-function ProjePuantajHucre({
+export function ProjePuantajHucre({
   durum,
   pazar,
   onClick,

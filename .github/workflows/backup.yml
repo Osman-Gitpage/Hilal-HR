@@ -2,30 +2,78 @@ name: Database Backup
 
 on:
   schedule:
-    - cron: '0 2 * * 1'
-  workflow_dispatch:
+    - cron: '0 2 * * 1' # Her Pazartesi saat 02:00 UTC
+  workflow_dispatch:       # Manuel tetikleme butonu
 
 jobs:
   backup:
+    name: Supabase PostgreSQL Backup
     runs-on: ubuntu-latest
     steps:
-      - name: Install PostgreSQL 17
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 17 Client
         run: |
+          sudo apt-get update -qq
           sudo apt-get install -y postgresql-common
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
           sudo apt-get install -y postgresql-client-17
 
-      - name: Backup Database
+      - name: Backup Database (Public Schema)
         run: |
+          set -euo pipefail
+          DATE=$(date +%Y%m%d_%H%M%S)
+          DUMP_FILE="backup_${DATE}.dump"
+          SQL_FILE="backup_${DATE}.sql.gz"
+
+          echo "=========================================="
+          echo "Supabase Yedeği Alınıyor: ${DATE}"
+          echo "=========================================="
+
+          # 1. Custom Binary Format (.dump - pg_restore için)
           /usr/lib/postgresql/17/bin/pg_dump "${{ secrets.SUPABASE_DB_URL }}" \
             --format=custom \
+            --schema=public \
+            --clean \
+            --if-exists \
             --no-acl \
             --no-owner \
-            -f backup_$(date +%Y%m%d).dump
+            -f "${DUMP_FILE}"
 
-      - name: Upload Backup
+          # 2. Sıkıştırılmış SQL Formatı (.sql.gz - metin olarak incelemek için)
+          /usr/lib/postgresql/17/bin/pg_dump "${{ secrets.SUPABASE_DB_URL }}" \
+            --schema=public \
+            --clean \
+            --if-exists \
+            --no-acl \
+            --no-owner \
+            | gzip > "${SQL_FILE}"
+
+          echo "=========================================="
+          echo "Oluşturulan Dosyalar:"
+          ls -lh backup_${DATE}.*
+          echo "=========================================="
+
+          # Boş dosya kontrolü (en az 500 byte olmalı)
+          DUMP_SIZE=$(stat -c%s "${DUMP_FILE}" 2>/dev/null || stat -f%z "${DUMP_FILE}" 2>/dev/null || echo 0)
+          if [ "${DUMP_SIZE}" -lt 500 ]; then
+            echo "HATA: Yedek dosyası boş veya çok küçük (${DUMP_SIZE} byte)!"
+            echo "Muhtemel Nedenler:"
+            echo "1. SUPABASE_DB_URL secret'ı yanlış veya boş."
+            echo "2. Doğrudan bağlantı (db.[ref].supabase.co - IPv6) kullanıldı, GitHub Actions IPv6'ya erişemedi."
+            echo "   Çözüm: IPv4 Connection Pooler adresini kullanın:"
+            echo "   postgresql://postgres.hutddekkeodelgydjeas:[SIFRE]@aws-0-eu-central-1.pooler.supabase.com:5432/postgres"
+            exit 1
+          fi
+
+          echo "Yedek başarıyla alındı! Boyut: ${DUMP_SIZE} byte"
+
+      - name: Upload Backup Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: db-backup-${{ github.run_id }}
-          path: backup_*.dump
+          path: |
+            backup_*.dump
+            backup_*.sql.gz
           retention-days: 30

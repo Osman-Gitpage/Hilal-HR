@@ -409,9 +409,9 @@ export async function donemAktifProjeleriGetir(yil: number, ay: number) {
           (log.bitis === null || log.bitis >= ayBaslangic)
       );
     } else {
-      // Dönem logu yoksa: eski mantık — sadece aktif projeler
+      // Dönem logu yoksa: başlangıç ve bitiş tarihi bu ayı kapsayan projeler
+      // (Arşivlenmiş olsa dahi o dönemde aktif olan gemilerin puantajda listelenmesi için)
       return (
-        proje.durum === "aktif" &&
         proje.baslangic_tarihi <= ayBitis &&
         (proje.bitis_tarihi === null || proje.bitis_tarihi >= ayBaslangic)
       );
@@ -437,7 +437,7 @@ export async function projeEkle(veri: {
   aciklama?: string | null;
   fatura_kodlari?: FaturaKodu[];
 }) {
-  const { supabase, sirketId } = await getAuthContext();
+  const { supabase, sirketId, user } = await getAuthContext();
 
   if (!veri.ad?.trim()) return { hata: "Proje adı zorunludur." };
   if (!veri.baslangic_tarihi) return { hata: "Başlangıç tarihi zorunludur." };
@@ -465,8 +465,20 @@ export async function projeEkle(veri: {
 
   if (error) return { hata: error.message };
 
+  const projeId = (data as any).id;
+
+  // Otomatik ilk dönem logunu oluştur: baslangic = baslangic_tarihi, bitis = null (devam ediyor)
+  await supabase.from("proje_donem_log").insert({
+    proje_id: projeId,
+    sirket_id: sirketId,
+    baslangic: veri.baslangic_tarihi,
+    bitis: null,
+    aciklama: "Proje başlangıç dönemi",
+    created_by: user.id,
+  } as any);
+
   revalidatePath("/puantaj/projeler");
-  return { basarili: true, projeId: (data as any).id };
+  return { basarili: true, projeId };
 }
 
 /**
@@ -524,7 +536,7 @@ export async function projeGuncelle(
  * bitis_tarihi kullanıcıdan alınır — zorunlu.
  */
 export async function projeArsivle(id: string, bitis_tarihi: string) {
-  const { supabase, sirketId } = await getAuthContext();
+  const { supabase, sirketId, user } = await getAuthContext();
 
   if (!bitis_tarihi) return { hata: "Bitiş tarihi zorunludur." };
 
@@ -540,6 +552,44 @@ export async function projeArsivle(id: string, bitis_tarihi: string) {
 
   if (error) return { hata: error.message };
 
+  // Açık olan dönem logunu bul ve bitis tarihini kapat
+  const { data: acikLoglar } = await supabase
+    .from("proje_donem_log")
+    .select("id, baslangic")
+    .eq("proje_id", id)
+    .eq("sirket_id", sirketId)
+    .is("bitis", null)
+    .order("baslangic", { ascending: false });
+
+  if (acikLoglar && acikLoglar.length > 0) {
+    await supabase
+      .from("proje_donem_log")
+      .update({
+        bitis: bitis_tarihi,
+      } as any)
+      .eq("id", acikLoglar[0].id)
+      .eq("sirket_id", sirketId);
+  } else {
+    // Daha önce hiç dönem logu oluşturulmamışsa başlangıç ve bu bitiş tarihiyle log oluştur
+    const { data: projeData } = await supabase
+      .from("proje")
+      .select("baslangic_tarihi")
+      .eq("id", id)
+      .eq("sirket_id", sirketId)
+      .single();
+
+    if (projeData?.baslangic_tarihi) {
+      await supabase.from("proje_donem_log").insert({
+        proje_id: id,
+        sirket_id: sirketId,
+        baslangic: projeData.baslangic_tarihi,
+        bitis: bitis_tarihi,
+        aciklama: "Arşivleme ile oluşturulan dönem",
+        created_by: user.id,
+      } as any);
+    }
+  }
+
   revalidatePath("/puantaj/projeler");
   return { basarili: true };
 }
@@ -549,7 +599,7 @@ export async function projeArsivle(id: string, bitis_tarihi: string) {
  * durum = 'aktif', bitis_tarihi = null yapılır.
  */
 export async function projeAktivasyonu(id: string) {
-  const { supabase, sirketId } = await getAuthContext();
+  const { supabase, sirketId, user } = await getAuthContext();
 
   const { error } = await supabase
     .from("proje")
@@ -562,6 +612,26 @@ export async function projeAktivasyonu(id: string) {
     .eq("sirket_id", sirketId);
 
   if (error) return { hata: error.message };
+
+  // Yeniden aktifleştirildiğinde açık dönem var mı kontrol et, yoksa yeni açık dönem başlat
+  const { data: acikLoglar } = await supabase
+    .from("proje_donem_log")
+    .select("id")
+    .eq("proje_id", id)
+    .eq("sirket_id", sirketId)
+    .is("bitis", null);
+
+  if (!acikLoglar || acikLoglar.length === 0) {
+    const bugunStr = new Date().toISOString().split("T")[0];
+    await supabase.from("proje_donem_log").insert({
+      proje_id: id,
+      sirket_id: sirketId,
+      baslangic: bugunStr,
+      bitis: null,
+      aciklama: "Yeniden aktivasyon dönemi",
+      created_by: user.id,
+    } as any);
+  }
 
   revalidatePath("/puantaj/projeler");
   return { basarili: true };
