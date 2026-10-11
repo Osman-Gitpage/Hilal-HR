@@ -1,67 +1,31 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { saveAs } from "file-saver";
-import { PDFDocument } from "pdf-lib";
-import fontkit from "@pdf-lib/fontkit";
 import { 
-  Users, 
-  Calendar as CalendarIcon, 
-  Wrench, 
-  MapPin, 
-  Mail, 
-  FileDown, 
-  AlertCircle, 
-  Plus, 
-  Trash2, 
-  ArrowRight, 
-  ArrowLeft, 
-  Check, 
-  Upload, 
-  ClipboardCheck,
-  Send,
-  Share2,
-  CheckCircle2
+  FileText, 
+  Share2, 
+  RotateCcw, 
+  Calendar, 
+  Building, 
+  User, 
+  Briefcase, 
+  Loader2, 
+  CheckCircle2 
 } from "lucide-react";
 import { toast } from "sonner";
+import { PDFDocument, rgb, PDFName } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
+import { saveAs } from "file-saver";
 
-// Sabit Personel Listesi
-const DEFAULT_PERSONNEL = [
-  "Abdulkadir Turan",
-  "Erol Günay",
-  "Harun Turan",
-  "Hayrettin Usta",
-  "İsrafil Turan",
-  "Metin Kılınç",
-  "Osman Aşçı",
-  "Şaban Gültepe",
-];
-
-// Popüler Hızlı Görev Seçenekleri
-const QUICK_TASKS = [
-  "Karkas Yapımı",
-  "İzolasyon Yapımı",
-  "Kaplama Yapımı",
-  "Kaynak & Montaj",
-  "Genel İşçilik",
-];
-
-// Hızlı Alan Önerileri
-const QUICK_AREAS = [
-  "Karkas Sahası",
-  "İzolasyon Sahası",
-  "Saha 1",
-  "Saha 2",
-  "A Blok",
-  "B Blok",
-  "Kazan Dairesi",
-];
-
-interface WorkAreaGroup {
-  id: string;
-  name: string;
-  assignedPersons: string[];
+interface PersonnelRow {
+  no: number;
+  adSoyad: string;
+  gorev: string;
+  calismaAlani: string;
 }
+
+const TOTAL_ROWS = 25;
+const STORAGE_KEY = "hilal_tevzi_draft_v2";
 
 export default function HilalTevziPage() {
   const getTodayFormatted = () => {
@@ -69,815 +33,577 @@ export default function HilalTevziPage() {
     const day = String(today.getDate()).padStart(2, "0");
     const month = String(today.getMonth() + 1).padStart(2, "0");
     const year = today.getFullYear();
-    return `${day}.${month}.${year}`;
+    return `${day}/${month}/${year}`;
   };
+
+  // Sabit Meta Bilgileri
+  const FIXED_PROJE = "8000TLC HAVUZ";
+  const FIXED_FORMEN = "HARUN TURAN";
+  const FIXED_FIRMA = "HİLAL İZOLASYON";
 
   // State'ler
-  const [currentStep, setCurrentStep] = useState<number>(1);
   const [docDate, setDocDate] = useState<string>(getTodayFormatted());
-  const [recipientEmail, setRecipientEmail] = useState<string>("edgetr55@gmail.com");
-  
-  // Personel Havuzu
-  const [personnelPool, setPersonnelPool] = useState<string[]>(DEFAULT_PERSONNEL);
-  const [newPersonName, setNewPersonName] = useState<string>("");
-  const [selectedPersons, setSelectedPersons] = useState<string[]>([]);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
+  const [rows, setRows] = useState<PersonnelRow[]>(() => {
+    return Array.from({ length: TOTAL_ROWS }, (_, i) => ({
+      no: i + 1,
+      adSoyad: "",
+      gorev: "",
+      calismaAlani: "",
+    }));
+  });
 
-  // Görevler
-  const [personTasks, setPersonTasks] = useState<Record<string, string>>({});
+  // Hücre referansları (Klavye navigasyonu ve Excel deneyimi için)
+  const cellRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  // Çalışma Alanı Grupları
-  const [workAreas, setWorkAreas] = useState<WorkAreaGroup[]>([
-    { id: "1", name: "", assignedPersons: [] },
-  ]);
+  // Şablon ve font önbelleği (iOS ve mobil gecikmelerini sıfırlamak için)
+  const cachedTemplateRef = useRef<ArrayBuffer | null>(null);
+  const cachedFontRef = useRef<ArrayBuffer | null>(null);
 
-  // Önceden Hazırlanmış PDF & Varlık Önbelleği (iOS Safari 0ms Share için)
-  const cachedTemplateBytesRef = useRef<ArrayBuffer | null>(null);
-  const cachedFontBytesRef = useRef<ArrayBuffer | null>(null);
-  const [prebuiltPdfFile, setPrebuiltPdfFile] = useState<File | null>(null);
-  const [isPrebuilding, setIsPrebuilding] = useState<boolean>(false);
-
-  const [pdfLoading, setPdfLoading] = useState<boolean>(false);
-  const [loadingText, setLoadingText] = useState<string>("");
-  const [customPdfFile, setCustomPdfFile] = useState<File | null>(null);
-  const [templateNotFound, setTemplateNotFound] = useState<boolean>(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Sayfa açıldığında şablon ve fontu RAM'e önden yükle
   useEffect(() => {
-    const preloadAssets = async () => {
-      try {
-        const tplResp = await fetch("/hilal-tevzi-sablon.pdf");
-        if (tplResp.ok) {
-          cachedTemplateBytesRef.current = await tplResp.arrayBuffer();
-        }
-      } catch (e) {}
+    // Sayfa açıldığında şablon ve fontu arka planda RAM'e yükle
+    fetch("/hilal-tevzi-sablon.pdf")
+      .then(r => r.ok ? r.arrayBuffer() : null)
+      .then(b => { if (b) cachedTemplateRef.current = b; })
+      .catch(() => {});
 
-      try {
-        let fontResp = await fetch("/fonts/TimesNewRoman.ttf");
-        if (!fontResp.ok) fontResp = await fetch("/fonts/Roboto.ttf");
-        if (fontResp.ok) {
-          cachedFontBytesRef.current = await fontResp.arrayBuffer();
-        }
-      } catch (e) {}
-    };
-
-    preloadAssets();
+    fetch("/fonts/TimesNewRoman.ttf")
+      .then(r => r.ok ? r.arrayBuffer() : null)
+      .then(b => { if (b) cachedFontRef.current = b; })
+      .catch(() => {});
   }, []);
 
-  // 1. ADIM: Kişi Seçimi
-  const togglePersonSelection = (name: string) => {
-    if (selectedPersons.includes(name)) {
-      setSelectedPersons(prev => prev.filter(p => p !== name));
-      setPersonTasks(prev => {
-        const copy = { ...prev };
-        delete copy[name];
-        return copy;
-      });
-      setWorkAreas(prev => prev.map(area => ({
-        ...area,
-        assignedPersons: area.assignedPersons.filter(p => p !== name)
-      })));
-    } else {
-      if (selectedPersons.length >= 10) {
-        toast.warning("En fazla 10 kişi seçebilirsiniz (PDF form limiti).");
-        return;
-      }
-      setSelectedPersons(prev => [...prev, name]);
-    }
-  };
-
-  const selectAllPersonnel = () => {
-    const top10 = personnelPool.slice(0, 10);
-    setSelectedPersons(top10);
-  };
-
-  const deselectAllPersonnel = () => {
-    setSelectedPersons([]);
-    setPersonTasks({});
-    setWorkAreas([{ id: "1", name: "", assignedPersons: [] }]);
-  };
-
-  const handleAddCustomPerson = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = newPersonName.trim();
-    if (!trimmed) return;
-    if (personnelPool.includes(trimmed)) {
-      toast.info("Bu kişi zaten listede mevcut.");
-      return;
-    }
-    setPersonnelPool(prev => [...prev, trimmed]);
-    if (selectedPersons.length < 10) {
-      setSelectedPersons(prev => [...prev, trimmed]);
-    }
-    setNewPersonName("");
-  };
-
-  // 2. ADIM: Görev Atama
-  const handleSetTask = (person: string, task: string) => {
-    setPersonTasks(prev => ({ ...prev, [person]: task }));
-  };
-
-  // 3. ADIM: Çalışma Alanı Yönetimi
-  const addWorkArea = () => {
-    setWorkAreas(prev => [
-      ...prev,
-      { id: Date.now().toString(), name: "", assignedPersons: [] }
-    ]);
-  };
-
-  const removeWorkArea = (id: string) => {
-    setWorkAreas(prev => prev.filter(a => a.id !== id));
-  };
-
-  const updateWorkAreaName = (id: string, name: string) => {
-    setWorkAreas(prev => prev.map(a => a.id === id ? { ...a, name } : a));
-  };
-
-  const togglePersonInArea = (areaId: string, person: string) => {
-    setWorkAreas(prev => prev.map(area => {
-      if (area.id === areaId) {
-        const exists = area.assignedPersons.includes(person);
-        return {
-          ...area,
-          assignedPersons: exists 
-            ? area.assignedPersons.filter(p => p !== person)
-            : [...area.assignedPersons, person]
-        };
-      } else {
-        return {
-          ...area,
-          assignedPersons: area.assignedPersons.filter(p => p !== person)
-        };
-      }
-    }));
-  };
-
-  const getPersonArea = (person: string): string => {
-    for (const area of workAreas) {
-      if (area.assignedPersons.includes(person)) {
-        return area.name || "—";
-      }
-    }
-    return "";
-  };
-
-  // PDF Oluşturma Çekirdeği
-  const generatePdfInstance = async (): Promise<File> => {
-    let pdfBytes = customPdfFile ? await customPdfFile.arrayBuffer() : cachedTemplateBytesRef.current;
-
-    if (!pdfBytes) {
-      try {
-        const resp = await fetch("/hilal-tevzi-sablon.pdf");
-        if (resp.ok) {
-          pdfBytes = await resp.arrayBuffer();
-          cachedTemplateBytesRef.current = pdfBytes;
-        }
-      } catch (e) {}
-    }
-
-    if (!pdfBytes) {
-      setTemplateNotFound(true);
-      throw new Error("Şablon PDF dosyası bulunamadı.");
-    }
-
-    let fontBytes = cachedFontBytesRef.current;
-    if (!fontBytes) {
-      try {
-        const fResp = await fetch("/fonts/TimesNewRoman.ttf");
-        if (fResp.ok) {
-          fontBytes = await fResp.arrayBuffer();
-          cachedFontBytesRef.current = fontBytes;
-        }
-      } catch (e) {}
-    }
-
-    const pdfDoc = await PDFDocument.load(pdfBytes);
-    pdfDoc.registerFontkit(fontkit);
-
-    let customFont: any = null;
-    if (fontBytes) {
-      try {
-        customFont = await pdfDoc.embedFont(fontBytes);
-      } catch (e) {}
-    }
-
-    const form = pdfDoc.getForm();
-
-    // Tarih
-    try {
-      const tarihField = form.getTextField("tarih");
-      if (tarihField) {
-        tarihField.setText(docDate || "");
-        if (customFont) tarihField.updateAppearances(customFont);
-      }
-    } catch (tErr) {}
-
-    // 10 Satır
-    for (let i = 1; i <= 10; i++) {
-      const personIndex = i - 1;
-      const person = selectedPersons[personIndex];
-      const task = person ? (personTasks[person] || "") : "";
-      const area = person ? (getPersonArea(person) === "—" ? "" : getPersonArea(person)) : "";
-
-      try {
-        const adSoyadField = form.getTextField(`ad_soyad_${i}`);
-        if (adSoyadField) {
-          adSoyadField.setText(person || "");
-          if (customFont) adSoyadField.updateAppearances(customFont);
-        }
-      } catch (e) {}
-
-      try {
-        const gorevField = form.getTextField(`gorev_${i}`);
-        if (gorevField) {
-          gorevField.setText(task);
-          if (customFont) gorevField.updateAppearances(customFont);
-        }
-      } catch (e) {}
-
-      try {
-        const calismaAlaniField = form.getTextField(`calisma_alani_${i}`);
-        if (calismaAlaniField) {
-          calismaAlaniField.setText(area);
-          if (customFont) calismaAlaniField.updateAppearances(customFont);
-        }
-      } catch (e) {}
-    }
-
-    form.flatten({ updateFieldAppearances: false });
-    const savedBytes = await pdfDoc.save({ updateFieldAppearances: false });
-    const blob = new Blob([savedBytes as any], { type: "application/pdf" });
-
-    const cleanDate = docDate ? docDate.replace(/[/\\?%*:|"<>]/g, ".") : "tarihsiz";
-    const fileName = `Hilal ${cleanDate}.pdf`;
-
-    return new File([blob], fileName, { type: "application/pdf" });
-  };
-
-  // 4. Adıma (Özet) geçildiğinde PDF'i arka planda HEMEN oluşturup RAM'e koy (iOS Gesture Delay Sıfırlama)
+  // LocalStorage'dan taslak yükleme
   useEffect(() => {
-    if (currentStep === 4 && selectedPersons.length > 0) {
-      setIsPrebuilding(true);
-      generatePdfInstance()
-        .then((file) => {
-          setPrebuiltPdfFile(file);
-        })
-        .catch((err) => {
-          console.warn("Ön PDF oluşturma hatası:", err);
-        })
-        .finally(() => {
-          setIsPrebuilding(false);
-        });
-    }
-  }, [currentStep, selectedPersons, personTasks, workAreas, docDate]);
-
-  // 4. ADIM: Mail / Gmail ile Gönder (Anında Senkron Tetikleme)
-  const handleSendViaEmailApp = async () => {
-    if (selectedPersons.length === 0) {
-      toast.error("Lütfen en az bir personel seçin.");
-      return;
-    }
-
-    const cleanSlashDate = docDate.replace(/\./g, "/");
-    const emailSubject = `Hilal Tevzi ${cleanSlashDate}`;
-    const emailBody = `Merhaba İyi Çalışmalar \n\n${docDate} Tarihli Tevzi Ektedir.\n\nSaygılarımızla\nHilal İzolasyon Ltd. Şti.\n0537 426 42 99`;
-
-    // 1. Eğer önceden hazırlanmış PDF hazırsa (iOS Safari kullanıcı dokunma süresi aşılmadan anında çalışır)
-    const targetFile = prebuiltPdfFile || (await generatePdfInstance());
-
-    if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [targetFile] })) {
-      try {
-        await navigator.share({
-          files: [targetFile],
-          title: emailSubject,
-          text: emailBody,
-        });
-        return;
-      } catch (shareErr: any) {
-        if (shareErr.name === "AbortError") {
-          return;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.rows && Array.isArray(parsed.rows)) {
+          setRows(parsed.rows);
         }
-        console.warn("Paylaşım hatası:", shareErr);
+        if (parsed.docDate) {
+          setDocDate(parsed.docDate);
+        }
+      }
+    } catch (e) {
+      console.error("Taslak yüklenirken hata:", e);
+    }
+  }, []);
+
+  // Değişiklikleri otomatik kaydet
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ docDate, rows }));
+    } catch (e) {
+      console.error("Taslak kaydedilirken hata:", e);
+    }
+  }, [docDate, rows]);
+
+  // Hücre değerini güncelle
+  const handleCellChange = (index: number, field: keyof Omit<PersonnelRow, "no">, value: string) => {
+    setRows(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  // Excel / Sheets tarzı klavye navigasyonu (Enter, Tab, Ok Tuşları)
+  const handleKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    rowIndex: number,
+    field: "adSoyad" | "gorev" | "calismaAlani"
+  ) => {
+    const fields: ("adSoyad" | "gorev" | "calismaAlani")[] = ["adSoyad", "gorev", "calismaAlani"];
+    const fieldIndex = fields.indexOf(field);
+
+    if (e.key === "Enter" || e.key === "ArrowDown") {
+      e.preventDefault();
+      if (rowIndex < TOTAL_ROWS - 1) {
+        cellRefs.current[`${rowIndex + 1}-${field}`]?.focus();
+      }
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (rowIndex > 0) {
+        cellRefs.current[`${rowIndex - 1}-${field}`]?.focus();
+      }
+    } else if (e.key === "Tab" && !e.shiftKey) {
+      if (fieldIndex === fields.length - 1 && rowIndex < TOTAL_ROWS - 1) {
+        e.preventDefault();
+        cellRefs.current[`${rowIndex + 1}-${fields[0]}`]?.focus();
+      }
+    } else if (e.key === "Tab" && e.shiftKey) {
+      if (fieldIndex === 0 && rowIndex > 0) {
+        e.preventDefault();
+        cellRefs.current[`${rowIndex - 1}-${fields[fields.length - 1]}`]?.focus();
       }
     }
-
-    // 2. Güvensiz HTTP veya masaüstü ortamındaysa alternatif
-    saveAs(targetFile, targetFile.name);
-    const mailtoUrl = `mailto:?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
-    window.location.href = mailtoUrl;
-    toast.info("PDF indirildi ve Mail açıldı.");
   };
 
-  // Sadece İndir
-  const handleOnlyDownload = async () => {
-    setPdfLoading(true);
-    setLoadingText("PDF İndiriliyor...");
-    try {
-      const file = prebuiltPdfFile || (await generatePdfInstance());
-      saveAs(file, file.name);
-      toast.success(`${file.name} indirildi!`);
-    } catch (err: any) {
-      toast.error(err.message || "Hata oluştu.");
-    } finally {
-      setPdfLoading(false);
-      setLoadingText("");
-    }
-  };
-
-  const handleManualPdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setCustomPdfFile(file);
-      setTemplateNotFound(false);
-      toast.success(`'${file.name}' şablon seçildi.`);
-    }
-  };
-
-  const goToNextStep = () => {
-    if (currentStep === 1 && selectedPersons.length === 0) {
-      toast.warning("Lütfen en az bir personel seçin.");
+  // Excel'den toplu kopyala - yapıştır (Ctrl+V) desteği
+  const handlePaste = (
+    e: React.ClipboardEvent<HTMLInputElement>,
+    startRowIndex: number,
+    startField: "adSoyad" | "gorev" | "calismaAlani"
+  ) => {
+    const pasteData = e.clipboardData.getData("text");
+    if (!pasteData || (!pasteData.includes("\t") && !pasteData.includes("\n"))) {
       return;
     }
-    setCurrentStep(prev => Math.min(prev + 1, 4));
-    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    e.preventDefault();
+    const rowsText = pasteData.split(/\r?\n/).filter(r => r.length > 0);
+    const fields: ("adSoyad" | "gorev" | "calismaAlani")[] = ["adSoyad", "gorev", "calismaAlani"];
+    const startColIndex = fields.indexOf(startField);
+
+    setRows(prev => {
+      const nextRows = [...prev];
+      rowsText.forEach((rowText, rOffset) => {
+        const targetRow = startRowIndex + rOffset;
+        if (targetRow < TOTAL_ROWS) {
+          const cols = rowText.split("\t");
+          cols.forEach((colVal, cOffset) => {
+            const targetColIndex = startColIndex + cOffset;
+            if (targetColIndex < fields.length) {
+              const fieldName = fields[targetColIndex];
+              nextRows[targetRow] = {
+                ...nextRows[targetRow],
+                [fieldName]: colVal.trim(),
+              };
+            }
+          });
+        }
+      });
+      return nextRows;
+    });
+
+    toast.success("Excel verileri hücrelere aktarıldı.");
   };
 
-  const goToPrevStep = () => {
-    setCurrentStep(prev => Math.max(prev - 1, 1));
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  // Tabloyu Temizle
+  const handleClearTable = () => {
+    if (window.confirm("Tablodaki tüm personel verileri temizlensin mi?")) {
+      setRows(
+        Array.from({ length: TOTAL_ROWS }, (_, i) => ({
+          no: i + 1,
+          adSoyad: "",
+          gorev: "",
+          calismaAlani: "",
+        }))
+      );
+      toast.info("Tablo temizlendi.");
+    }
+  };
+
+  // Aktif dolu satır sayısı
+  const filledCount = rows.filter(r => r.adSoyad.trim() !== "").length;
+
+  // PDF Oluşturma ve Doğrudan Gmail Uygulamasına Yönlendirme
+  const handleSendMail = async () => {
+    if (filledCount === 0) {
+      toast.warning("Lütfen en az bir personel bilgisi girin.");
+      return;
+    }
+
+    try {
+      setIsGeneratingPdf(true);
+      toast.loading("PDF hazırlanıyor ve Gmail'e yönlendiriliyor...", { id: "mail-toast" });
+
+      // 1. Şablon PDF ve Fontu Getir (Varsa Önbellekten 0ms)
+      let templateBytes = cachedTemplateRef.current;
+      if (!templateBytes) {
+        const tRes = await fetch("/hilal-tevzi-sablon.pdf");
+        if (tRes.ok) templateBytes = await tRes.arrayBuffer();
+      }
+
+      if (!templateBytes) {
+        throw new Error("Şablon PDF dosyası (public/hilal-tevzi-sablon.pdf) bulunamadı.");
+      }
+
+      let fontBytes = cachedFontRef.current;
+      if (!fontBytes) {
+        const fRes = await fetch("/fonts/TimesNewRoman.ttf");
+        if (fRes.ok) fontBytes = await fRes.arrayBuffer();
+      }
+
+      const pdfDoc = await PDFDocument.load(templateBytes);
+      pdfDoc.registerFontkit(fontkit);
+
+      let customFont = null;
+      if (fontBytes) {
+        customFont = await pdfDoc.embedFont(fontBytes);
+      }
+
+      const form = pdfDoc.getForm();
+
+      // 2. Tarih Alanını Doldur
+      try {
+        const tarihField = form.getTextField("tarih");
+        if (tarihField) {
+          tarihField.setText(docDate || "");
+          if (customFont) tarihField.updateAppearances(customFont);
+        }
+      } catch (e) {}
+
+      // 3. 25 Satırlık Personel Form Alanlarını Doldur
+      for (let i = 1; i <= TOTAL_ROWS; i++) {
+        const row = rows[i - 1];
+        const adSoyadVal = row?.adSoyad?.trim() || "";
+        const gorevVal = row?.gorev?.trim() || "";
+        const calismaVal = row?.calismaAlani?.trim() || "";
+
+        try {
+          const adField = form.getTextField(`ad_soyad_${i}`);
+          if (adField) {
+            adField.setText(adSoyadVal);
+            if (customFont) adField.updateAppearances(customFont);
+          }
+        } catch (e) {}
+
+        try {
+          const gorevField = form.getTextField(`gorev_${i}`);
+          if (gorevField) {
+            gorevField.setText(gorevVal);
+            if (customFont) gorevField.updateAppearances(customFont);
+          }
+        } catch (e) {}
+
+        try {
+          const alanField = form.getTextField(`calisma_alani_${i}`);
+          if (alanField) {
+            alanField.setText(calismaVal);
+            if (customFont) alanField.updateAppearances(customFont);
+          }
+        } catch (e) {}
+      }
+
+      // 4. Tüm form alanlarının çevre çizgilerini (border) ve arka planlarını sıfırla / tamamen şeffaf yap
+      for (const field of form.getFields()) {
+        try {
+          for (const widget of (field as any).acroField?.getWidgets?.() || []) {
+            const bs = widget.getOrCreateBorderStyle();
+            bs.setWidth(0);
+            const app = widget.getOrCreateAppearanceCharacteristics();
+            app?.dict?.delete(PDFName.of("BC"));
+            app?.dict?.delete(PDFName.of("BG"));
+          }
+        } catch (e) {}
+      }
+
+      // 5. Formu düzleştir ve PDF dosyasını üret
+      form.flatten({ updateFieldAppearances: false });
+      const pdfBytes = await pdfDoc.save({ updateFieldAppearances: false });
+      const blob = new Blob([pdfBytes as any], { type: "application/pdf" });
+
+      const cleanDate = docDate ? docDate.replace(/[/\\?%*:|"<>]/g, ".") : "tarihsiz";
+      const fileName = `Hilal ${cleanDate}.pdf`;
+      const mailSubject = `Hilal Tevzi ${docDate || cleanDate}`;
+      const pdfFile = new File([blob], fileName, { type: "application/pdf" });
+
+      // 6. Cihazın Yerel Paylaşım Menüsünü Aç (Web Share API - Gmail, WhatsApp vb.)
+      if (typeof navigator !== "undefined" && navigator.share) {
+        try {
+          if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+            await navigator.share({
+              title: mailSubject,
+              files: [pdfFile],
+            });
+            toast.success("Paylaşım menüsü açıldı.", { id: "mail-toast" });
+            return;
+          } else {
+            // Dosya desteklenmiyorsa PDF'i indir ve metin olarak paylaşımı tetikle
+            saveAs(blob, fileName);
+            await navigator.share({
+              title: mailSubject,
+              text: `${mailSubject} formu ektedir.`,
+            });
+            toast.success("PDF indirildi ve paylaşım menüsü açıldı.", { id: "mail-toast" });
+            return;
+          }
+        } catch (shareErr: any) {
+          if (shareErr.name === "AbortError") {
+            toast.dismiss("mail-toast");
+            return; // Kullanıcı menüyü kapattı
+          }
+          console.warn("Share API hatası:", shareErr);
+        }
+      }
+
+      // Tarayıcı Paylaşım API'sini Desteklemiyorsa (veya HTTP üzerinden bağlanıldığı için tarayıcı kilitlediyse):
+      saveAs(blob, fileName);
+      if (typeof window !== "undefined" && !window.isSecureContext) {
+        toast.info(`${fileName} indirildi. (Mobilde doğrudan Paylaş menüsü için 'dev:https' ile bağlanabilirsiniz)`, { id: "mail-toast", duration: 5000 });
+      } else {
+        toast.success(`${fileName} başarıyla indirildi.`, { id: "mail-toast" });
+      }
+
+    } catch (err: any) {
+      console.error("Paylaşım hatası:", err);
+      toast.error(err.message || "İşlem sırasında bir hata oluştu.", { id: "mail-toast" });
+    } finally {
+      setIsGeneratingPdf(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased flex flex-col justify-between pb-32 selection:bg-slate-900 selection:text-white">
-      {/* Loading Overlay */}
-      {pdfLoading && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-150">
-          <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-xl flex flex-col items-center gap-3.5 max-w-xs w-full">
-            <div className="size-10 rounded-full border-3 border-slate-200 border-t-slate-900 animate-spin" />
-            <div className="space-y-0.5">
-              <p className="text-sm font-semibold text-slate-900">{loadingText}</p>
-              <p className="text-xs text-slate-500">Lütfen bekleyin...</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 shadow-xs">
-        <div className="max-w-md mx-auto space-y-2.5">
-          {/* Top Info */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="size-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                H
-              </div>
-              <div>
-                <h1 className="text-sm font-bold text-slate-900 leading-tight">Hilal Tevzi Formu</h1>
-                <p className="text-[11px] text-slate-500">Günlük Personel Dağılımı</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-700">
-              <CalendarIcon className="size-3.5 text-slate-500" />
-              <span>{docDate}</span>
-            </div>
-          </div>
-
-          {/* Stepper Tabs */}
-          <div className="grid grid-cols-4 gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
-            {[
-              { num: 1, label: "Kişiler" },
-              { num: 2, label: "Görev" },
-              { num: 3, label: "Alan" },
-              { num: 4, label: "Özet" },
-            ].map((step) => {
-              const isActive = currentStep === step.num;
-              return (
-                <button
-                  key={step.num}
-                  type="button"
-                  onClick={() => setCurrentStep(step.num)}
-                  className={`py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                    isActive
-                      ? "bg-white text-slate-900 shadow-xs font-semibold"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  {step.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-md mx-auto px-4 pt-4 flex-1 w-full space-y-4">
+    <div className="min-h-screen bg-neutral-100 text-neutral-900 pb-24 sm:pb-12 pt-3 sm:pt-6 px-2 sm:px-6 antialiased">
+      <div className="max-w-5xl mx-auto space-y-3 sm:space-y-4">
         
-        {/* ========================================================
-            ADIM 1: TARİH & KİŞİLER
-        ======================================================== */}
-        {currentStep === 1 && (
-          <div className="space-y-4 animate-in fade-in duration-150">
-            {/* Tarih Kartı */}
-            <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs flex items-center justify-between">
-              <div>
-                <span className="text-xs font-medium text-slate-500 block">Form Tarihi</span>
-                <span className="text-sm font-semibold text-slate-800">Tarihi Belirle</span>
-              </div>
-              <input
-                type="text"
-                value={docDate}
-                onChange={(e) => setDocDate(e.target.value)}
-                placeholder="11.09.2026"
-                className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-semibold px-3 py-2 rounded-lg text-right w-32 focus:outline-none focus:border-slate-400 focus:bg-white transition"
-              />
+        {/* Üst Başlık & Kontrol Çubuğu */}
+        <div className="bg-white rounded-xl shadow-xs border border-neutral-200 p-3 sm:p-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 font-bold">
+              <FileText className="w-5 h-5" />
             </div>
-
-            {/* Kişi Seçimi Başlığı */}
-            <div className="flex items-center justify-between pt-1">
-              <div>
-                <h2 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                  <Users className="size-4 text-slate-700" />
-                  Çalışan Personeller
-                </h2>
-                <p className="text-xs text-slate-500">
-                  {selectedPersons.length} / 10 kişi seçildi
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={selectAllPersonnel}
-                  className="text-xs font-medium text-slate-700 hover:text-slate-900 underline underline-offset-2"
-                >
-                  Tümünü Seç
-                </button>
-                <span className="text-slate-300">•</span>
-                <button
-                  type="button"
-                  onClick={deselectAllPersonnel}
-                  className="text-xs font-medium text-rose-600 hover:text-rose-700"
-                >
-                  Temizle
-                </button>
-              </div>
-            </div>
-
-            {/* Personel Listesi */}
-            <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100 shadow-xs overflow-hidden">
-              {personnelPool.map((person) => {
-                const isSelected = selectedPersons.includes(person);
-                const selIndex = selectedPersons.indexOf(person) + 1;
-                return (
-                  <button
-                    key={person}
-                    type="button"
-                    onClick={() => togglePersonSelection(person)}
-                    className={`w-full flex items-center justify-between px-3.5 py-3 text-left transition-colors cursor-pointer ${
-                      isSelected ? "bg-slate-50/80" : "hover:bg-slate-50/50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`size-7 rounded-md flex items-center justify-center text-xs font-semibold transition ${
-                        isSelected 
-                          ? "bg-slate-900 text-white" 
-                          : "bg-slate-100 text-slate-600"
-                      }`}>
-                        {isSelected ? selIndex : person.charAt(0)}
-                      </div>
-                      <span className={`text-sm ${
-                        isSelected ? "font-semibold text-slate-900" : "font-normal text-slate-700"
-                      }`}>
-                        {person}
-                      </span>
-                    </div>
-
-                    <div className={`size-5 rounded-md flex items-center justify-center border transition ${
-                      isSelected 
-                        ? "bg-slate-900 border-slate-900 text-white" 
-                        : "border-slate-300 bg-white"
-                    }`}>
-                      {isSelected && <Check className="size-3.5 stroke-[2.5]" />}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Listede Olmayan Kişi Ekle */}
-            <form onSubmit={handleAddCustomPerson} className="pt-1">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newPersonName}
-                  onChange={(e) => setNewPersonName(e.target.value)}
-                  placeholder="Listede olmayan personel ekle..."
-                  className="bg-white border border-slate-200 text-slate-800 text-xs px-3.5 py-2.5 rounded-xl flex-1 focus:outline-none focus:border-slate-400 transition"
-                />
-                <button
-                  type="submit"
-                  disabled={!newPersonName.trim()}
-                  className="bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-xs font-medium px-4 py-2.5 rounded-xl transition"
-                >
-                  Ekle
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* ========================================================
-            ADIM 2: GÖREVLER
-        ======================================================== */}
-        {currentStep === 2 && (
-          <div className="space-y-3 animate-in fade-in duration-150">
-            <div>
-              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                <Wrench className="size-4 text-slate-700" />
-                Görev Dağılımı
-              </h2>
-              <p className="text-xs text-slate-500">Her personelin yapacağı görevi seçin</p>
-            </div>
-
-            <div className="space-y-2.5">
-              {selectedPersons.map((person, idx) => {
-                const currentTask = personTasks[person] || "";
-                return (
-                  <div 
-                    key={person} 
-                    className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-2.5 shadow-xs"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="size-5 rounded bg-slate-100 text-slate-700 text-xs font-bold flex items-center justify-center">
-                          {idx + 1}
-                        </span>
-                        <span className="text-sm font-semibold text-slate-900">{person}</span>
-                      </div>
-                      {currentTask && (
-                        <span className="text-[11px] font-medium bg-slate-100 text-slate-800 px-2 py-0.5 rounded border border-slate-200">
-                          {currentTask}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Hızlı Görev Seçimi */}
-                    <div className="flex flex-wrap gap-1.5">
-                      {QUICK_TASKS.map((task) => (
-                        <button
-                          key={task}
-                          type="button"
-                          onClick={() => handleSetTask(person, task)}
-                          className={`text-xs px-2.5 py-1 rounded-lg transition cursor-pointer ${
-                            currentTask === task
-                              ? "bg-slate-900 text-white font-medium"
-                              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                          }`}
-                        >
-                          {task}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Özel Görev Girişi */}
-                    <input
-                      type="text"
-                      value={currentTask}
-                      onChange={(e) => handleSetTask(person, e.target.value)}
-                      placeholder="veya özel görev yazın..."
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-slate-400 focus:bg-white transition"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================
-            ADIM 3: ÇALIŞMA ALANLARI
-        ======================================================== */}
-        {currentStep === 3 && (
-          <div className="space-y-3 animate-in fade-in duration-150">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                  <MapPin className="size-4 text-slate-700" />
-                  Çalışma Alanları
-                </h2>
-                <p className="text-xs text-slate-500">Alanı yazıp çalışanları eşleyin</p>
-              </div>
-
-              <button
-                type="button"
-                onClick={addWorkArea}
-                className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-xs transition"
-              >
-                <Plus className="size-3.5" />
-                Alan Ekle
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {workAreas.map((area, areaIdx) => (
-                <div 
-                  key={area.id}
-                  className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-3 shadow-xs"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-                      {areaIdx + 1}. Alan
-                    </span>
-                    {workAreas.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeWorkArea(area.id)}
-                        className="text-slate-400 hover:text-rose-600 p-0.5 transition"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Alan İsmi */}
-                  <input
-                    type="text"
-                    value={area.name}
-                    onChange={(e) => updateWorkAreaName(area.id, e.target.value)}
-                    placeholder="Örn: Karkas Sahası, İzolasyon Bölümü, 1. Kat..."
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-slate-400 focus:bg-white transition"
-                  />
-
-                  {/* Hızlı Öneriler */}
-                  <div className="flex flex-wrap gap-1">
-                    {QUICK_AREAS.map((suggested) => (
-                      <button
-                        key={suggested}
-                        type="button"
-                        onClick={() => updateWorkAreaName(area.id, suggested)}
-                        className={`text-[11px] px-2 py-0.5 rounded transition ${
-                          area.name === suggested
-                            ? "bg-slate-900 text-white font-medium"
-                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                        }`}
-                      >
-                        {suggested}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Personeller */}
-                  <div className="space-y-1.5 pt-1 border-t border-slate-100">
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span>Bu Alanda Çalışanlar:</span>
-                      <span className="font-semibold text-slate-800">{area.assignedPersons.length} kişi</span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1.5">
-                      {selectedPersons.map((person) => {
-                        const isInThisArea = area.assignedPersons.includes(person);
-                        return (
-                          <button
-                            key={person}
-                            type="button"
-                            onClick={() => togglePersonInArea(area.id, person)}
-                            className={`text-xs px-2.5 py-1 rounded-lg border transition flex items-center gap-1.5 cursor-pointer ${
-                              isInThisArea
-                                ? "bg-slate-900 border-slate-900 text-white font-medium shadow-xs"
-                                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-                            }`}
-                          >
-                            <span>{person}</span>
-                            {isInThisArea && <Check className="size-3 stroke-[3]" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================
-            ADIM 4: ÖZET VE MAİL İLE GÖNDERME
-        ======================================================== */}
-        {currentStep === 4 && (
-          <div className="space-y-3.5 animate-in fade-in duration-150">
-            <div>
-              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                <ClipboardCheck className="size-4 text-slate-700" />
-                Tevzi Listesi Özeti
-              </h2>
-              <p className="text-xs text-slate-500">
-                Seçilen {selectedPersons.length} personel için tevzi listesi hazırlandı
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold text-neutral-900 truncate">
+                Hilal Tevzi Formu
+              </h1>
+              <p className="text-[11px] sm:text-xs text-neutral-500">
+                25 Satır Tablo • Dolu: <span className="font-bold text-blue-600">{filledCount} / 25</span>
               </p>
             </div>
+          </div>
 
-            {templateNotFound && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-2 text-xs text-amber-900">
-                <div className="flex items-center gap-1.5 font-bold text-amber-800">
-                  <AlertCircle className="size-4 text-amber-600" />
-                  PDF Şablonu Bulunamadı
-                </div>
-                <p className="text-amber-700">
-                  <code>public/hilal-tevzi-sablon.pdf</code> dosyası bulunamadı. Şablonunuzu aşağıdan seçebilirsiniz:
-                </p>
+          {/* Masaüstü Aksiyon Butonları */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleClearTable}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-neutral-600 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Temizle</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={isGeneratingPdf}
+              onClick={handleSendMail}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg shadow-xs transition-colors cursor-pointer"
+            >
+              {isGeneratingPdf ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Hazırlanıyor...</span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Paylaş</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Ana İçerik / Excel Belge Görünümü */}
+        <div className="bg-white rounded-xl shadow-xs border border-neutral-300 p-3 sm:p-7">
+          
+          {/* Başlık */}
+          <div className="text-center pb-3 border-b-2 border-neutral-800 mb-4 sm:mb-6">
+            <h2 className="text-base sm:text-2xl font-black tracking-wider text-neutral-900 uppercase">
+              PERSONEL GÜNLÜK TAKİP FORMU
+            </h2>
+          </div>
+
+          {/* Üst Bilgiler (Metadata) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 text-xs sm:text-sm mb-4 sm:mb-6">
+            {/* Sol: Proje & Formen */}
+            <div className="space-y-2">
+              <div className="flex border border-neutral-300 rounded-lg overflow-hidden bg-white">
+                <span className="w-24 sm:w-32 bg-neutral-100 px-2.5 py-2 font-bold text-neutral-600 text-xs flex items-center gap-1 border-r border-neutral-300 shrink-0">
+                  <Building className="w-3 h-3 text-neutral-500" />
+                  PROJE
+                </span>
+                <span className="px-2.5 py-2 font-semibold text-neutral-800 flex-1 truncate">
+                  {FIXED_PROJE}
+                </span>
+              </div>
+
+              <div className="flex border border-neutral-300 rounded-lg overflow-hidden bg-white">
+                <span className="w-24 sm:w-32 bg-neutral-100 px-2.5 py-2 font-bold text-neutral-600 text-xs flex items-center gap-1 border-r border-neutral-300 shrink-0">
+                  <User className="w-3 h-3 text-neutral-500" />
+                  FORMEN
+                </span>
+                <span className="px-2.5 py-2 font-semibold text-neutral-800 flex-1 truncate">
+                  {FIXED_FORMEN}
+                </span>
+              </div>
+            </div>
+
+            {/* Sağ: Tarih & Firma */}
+            <div className="space-y-2">
+              <div className="flex border-2 border-blue-500 rounded-lg overflow-hidden bg-white shadow-xs">
+                <span className="w-24 sm:w-36 bg-blue-50 px-2.5 py-2 font-bold text-blue-900 text-xs flex items-center gap-1 border-r border-blue-200 shrink-0">
+                  <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                  TARİH
+                </span>
                 <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleManualPdfUpload}
-                  accept=".pdf"
-                  className="hidden"
+                  type="text"
+                  value={docDate}
+                  onChange={(e) => setDocDate(e.target.value)}
+                  placeholder="GG/AA/YYYY"
+                  className="px-2.5 py-2 font-bold text-neutral-900 flex-1 outline-none text-sm bg-yellow-50/30 focus:bg-white"
                 />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full bg-white border border-amber-300 text-amber-900 py-1.5 rounded-lg text-xs font-semibold hover:bg-amber-100/50 transition"
-                >
-                  {customPdfFile ? customPdfFile.name : "PDF Şablonunu Seç"}
-                </button>
-              </div>
-            )}
-
-            {/* Sade Tablo / Liste Özeti */}
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 shadow-xs">
-              <div className="bg-slate-50 px-3.5 py-2.5 flex items-center justify-between text-xs font-semibold text-slate-600 border-b border-slate-200">
-                <span>Tarih: <strong className="text-slate-900">{docDate}</strong></span>
-                <span>{selectedPersons.length} Kişi</span>
               </div>
 
-              {selectedPersons.map((person, idx) => {
-                const task = personTasks[person] || "—";
-                const area = getPersonArea(person) || "—";
-                return (
-                  <div key={person} className="p-3 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="size-5 rounded bg-slate-100 text-slate-700 text-xs font-bold flex items-center justify-center">
-                          {idx + 1}
-                        </span>
-                        <span className="text-sm font-semibold text-slate-900">{person}</span>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="bg-slate-50 rounded-lg p-2 border border-slate-100">
-                        <span className="text-[10px] text-slate-500 block">Görevi:</span>
-                        <span className="text-slate-800 font-medium truncate block">{task}</span>
-                      </div>
-                      <div className="bg-slate-50 rounded-lg p-2 border border-slate-100">
-                        <span className="text-[10px] text-slate-500 block">Çalışma Alanı:</span>
-                        <span className="text-slate-800 font-medium truncate block">{area}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              <div className="flex border border-neutral-300 rounded-lg overflow-hidden bg-white">
+                <span className="w-24 sm:w-36 bg-neutral-100 px-2.5 py-2 font-bold text-neutral-600 text-xs flex items-center gap-1 border-r border-neutral-300 shrink-0">
+                  <Briefcase className="w-3 h-3 text-neutral-500" />
+                  FİRMA / İŞ
+                </span>
+                <span className="px-2.5 py-2 font-semibold text-neutral-800 flex-1 truncate">
+                  {FIXED_FIRMA}
+                </span>
+              </div>
             </div>
           </div>
-        )}
-      </main>
 
-      {/* Sticky Bottom Navigation */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3 shadow-lg">
-        <div className="max-w-md mx-auto flex items-center gap-2">
-          {currentStep > 1 && (
-            <button
-              type="button"
-              onClick={goToPrevStep}
-              className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-medium h-11 px-4 rounded-xl active:scale-95 transition flex items-center gap-1"
-            >
-              <ArrowLeft className="size-3.5" />
-              Geri
-            </button>
-          )}
+          {/* SADECE TABLO GÖRÜNÜMÜ (AD SOYAD SÜTUNU SOLA SABİT / STICKY) */}
+          <div className="border border-neutral-400 rounded-lg overflow-x-auto shadow-2xs relative">
+            <table className="w-full text-left border-collapse text-xs sm:text-sm min-w-[560px]">
+              <thead>
+                <tr className="bg-neutral-200 text-neutral-800 border-b border-neutral-400 font-bold uppercase select-none">
+                  {/* NO Sütunu (Normal, kaydırılabilir) */}
+                  <th className="w-10 text-center py-2 px-1 border-r border-neutral-400">
+                    NO
+                  </th>
+                  {/* AD SOYAD (SABİT DONDURULMUŞ SÜTUN) */}
+                  <th className="py-2 px-2.5 border-r border-neutral-400 min-w-[150px] sm:min-w-[200px] sticky left-0 z-20 bg-neutral-200 shadow-[2px_0_4px_rgba(0,0,0,0.06)]">
+                    AD SOYAD
+                  </th>
+                  <th className="py-2 px-2 border-r border-neutral-400 min-w-[130px] sm:w-1/4">
+                    GÖREVİ
+                  </th>
+                  <th className="py-2 px-2 border-r border-neutral-400 min-w-[130px] sm:w-1/4">
+                    ÇALIŞMA ALANI
+                  </th>
+                  <th className="py-2 px-1 text-center w-14">
+                    İMZA
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  <tr 
+                    key={row.no}
+                    className={`border-b border-neutral-300 transition-colors ${
+                      index % 2 === 1 ? "bg-neutral-50/70" : "bg-white"
+                    } hover:bg-blue-50/30`}
+                  >
+                    {/* NO Kolonu */}
+                    <td className="text-center font-bold text-neutral-500 py-1 px-1 border-r border-neutral-300 bg-neutral-100 select-none">
+                      {row.no}
+                    </td>
 
-          {currentStep < 4 ? (
-            <button
-              type="button"
-              onClick={goToNextStep}
-              className="flex-1 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold h-11 rounded-xl shadow-xs active:scale-98 transition flex items-center justify-center gap-1.5"
-            >
-              <span>Sonraki Adım</span>
-              <ArrowRight className="size-3.5" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSendViaEmailApp}
-              disabled={selectedPersons.length === 0}
-              className="flex-1 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-bold h-11 rounded-xl shadow-sm active:scale-98 transition flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <Send className="size-4" />
-              <span>Gmail / Mail ile Gönder</span>
-            </button>
-          )}
+                    {/* AD SOYAD (SABİT DONDURULMUŞ HÜCRE) */}
+                    <td className={`p-0 border-r border-neutral-300 sticky left-0 z-10 shadow-[2px_0_4px_rgba(0,0,0,0.06)] ${
+                      index % 2 === 1 ? "bg-neutral-50" : "bg-white"
+                    }`}>
+                      <input
+                        ref={(el) => { cellRefs.current[`${index}-adSoyad`] = el; }}
+                        type="text"
+                        value={row.adSoyad}
+                        onChange={(e) => handleCellChange(index, "adSoyad", e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(e, index, "adSoyad")}
+                        onPaste={(e) => handlePaste(e, index, "adSoyad")}
+                        placeholder={index === 0 ? "Ad Soyad yazın..." : ""}
+                        className="w-full h-8 sm:h-9 px-2 sm:px-3 bg-transparent outline-none font-semibold text-neutral-900 focus:bg-amber-50 focus:ring-1 focus:ring-inset focus:ring-blue-500 text-xs sm:text-sm"
+                      />
+                    </td>
+
+                    {/* GÖREVİ */}
+                    <td className="p-0 border-r border-neutral-300">
+                      <input
+                        ref={(el) => { cellRefs.current[`${index}-gorev`] = el; }}
+                        type="text"
+                        value={row.gorev}
+                        onChange={(e) => handleCellChange(index, "gorev", e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(e, index, "gorev")}
+                        onPaste={(e) => handlePaste(e, index, "gorev")}
+                        placeholder={index === 0 ? "Görevi..." : ""}
+                        className="w-full h-8 sm:h-9 px-2 sm:px-3 bg-transparent outline-none text-neutral-800 focus:bg-amber-50 focus:ring-1 focus:ring-inset focus:ring-blue-500 text-xs sm:text-sm"
+                      />
+                    </td>
+
+                    {/* ÇALIŞMA ALANI */}
+                    <td className="p-0 border-r border-neutral-300">
+                      <input
+                        ref={(el) => { cellRefs.current[`${index}-calismaAlani`] = el; }}
+                        type="text"
+                        value={row.calismaAlani}
+                        onChange={(e) => handleCellChange(index, "calismaAlani", e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(e, index, "calismaAlani")}
+                        onPaste={(e) => handlePaste(e, index, "calismaAlani")}
+                        placeholder={index === 0 ? "Çalışma alanı..." : ""}
+                        className="w-full h-8 sm:h-9 px-2 sm:px-3 bg-transparent outline-none text-neutral-800 focus:bg-amber-50 focus:ring-1 focus:ring-inset focus:ring-blue-500 text-xs sm:text-sm"
+                      />
+                    </td>
+
+                    {/* İMZA (Boş) */}
+                    <td className="py-1 px-1 text-center text-neutral-300 select-none text-[11px]">
+                      —
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Alt Kısım: Firma Yetkilisi Kaşe / İmza */}
+          <div className="mt-6 sm:mt-8 flex justify-center sm:justify-end">
+            <div className="w-full sm:w-72 border-2 border-neutral-300 rounded-lg p-3 sm:p-4 text-center bg-neutral-50/50 space-y-8 sm:space-y-12">
+              <div>
+                <p className="text-[11px] sm:text-xs font-extrabold tracking-wider text-neutral-700 uppercase">
+                  FİRMA YETKİLİSİ
+                </p>
+                <p className="text-xs sm:text-sm font-black text-neutral-900 mt-0.5">
+                  {FIXED_FIRMA}
+                </p>
+              </div>
+              <div className="border-t border-dashed border-neutral-300 pt-1 text-[11px] text-neutral-400">
+                Kaşe / İmza
+              </div>
+            </div>
+          </div>
+
         </div>
-      </footer>
+
+      </div>
+
+      {/* MOBİL İÇİN SABİT ALT AKSİYON ÇUBUĞU */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-neutral-200 p-2.5 px-3 z-50 flex items-center justify-between gap-2 shadow-lg">
+        <button
+          type="button"
+          onClick={handleClearTable}
+          className="flex items-center gap-1 px-3 py-2 text-xs font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-lg shrink-0"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          Temizle
+        </button>
+
+        <button
+          type="button"
+          disabled={isGeneratingPdf}
+          onClick={handleSendMail}
+          className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg shadow-sm"
+        >
+          {isGeneratingPdf ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>Hazırlanıyor...</span>
+            </>
+          ) : (
+            <>
+              <Share2 className="w-3.5 h-3.5" />
+              <span>Paylaş ({filledCount}/25)</span>
+            </>
+          )}
+        </button>
+      </div>
+
     </div>
   );
 }

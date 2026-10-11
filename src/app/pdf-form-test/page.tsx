@@ -46,6 +46,97 @@ interface BulkImageConfig {
   multipleFiles?: File[];
 }
 
+export interface FontOption {
+  id: string;
+  name: string;
+  file: string;
+}
+
+export const AVAILABLE_FONTS: FontOption[] = [
+  { id: "calibri", name: "Calibri (Varsayılan)", file: "/fonts/Calibri.ttf" },
+  { id: "calibri-bold", name: "Calibri (Kalın - Bold)", file: "/fonts/Calibri-Bold.ttf" },
+  { id: "roboto", name: "Roboto (Normal)", file: "/fonts/Roboto.ttf" },
+  { id: "roboto-bold", name: "Roboto (Kalın - Bold)", file: "/fonts/Roboto-Bold.ttf" },
+  { id: "times", name: "Times New Roman (Normal)", file: "/fonts/TimesNewRoman.ttf" },
+  { id: "times-bold", name: "Times New Roman (Kalın - Bold)", file: "/fonts/TimesNewRoman-Bold.ttf" },
+];
+
+/**
+ * Tarih değerini gg.aa.yyyy (gün/ay 2 basamak, yıl 4 basamak, kısaltmasız) formatına dönüştürür.
+ */
+export function normalizeTurkishDate(value: any, fieldName?: string): string {
+  if (value === null || value === undefined || value === "") return "";
+
+  // 1. JavaScript Date nesnesi ise
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return "";
+    const d = String(value.getDate()).padStart(2, "0");
+    const m = String(value.getMonth() + 1).padStart(2, "0");
+    const y = String(value.getFullYear());
+    return `${d}.${m}.${y}`;
+  }
+
+  // 2. Sayı ise ve alan adı tarih ile ilişkiliyse (Excel serial date number, örn: 45214)
+  if (typeof value === "number") {
+    const isDateField = fieldName && /(tarih|date|dogum|giris|cikis|muayene|police|vize|bitis|baslangic)/i.test(fieldName);
+    if (isDateField && value > 20000 && value < 60000) {
+      try {
+        const parsed = XLSX.SSF.parse_date_code(value);
+        if (parsed && parsed.y && parsed.m && parsed.d) {
+          const d = String(parsed.d).padStart(2, "0");
+          const m = String(parsed.m).padStart(2, "0");
+          return `${d}.${m}.${parsed.y}`;
+        }
+      } catch {}
+    }
+    return String(value);
+  }
+
+  const str = String(value).trim();
+  if (!str) return "";
+
+  // 3. ISO formatı: YYYY-MM-DD veya YYYY.MM.DD veya YYYY/MM/DD (saat kısmı olabilir)
+  const isoMatch = str.match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})(?:[T\s].*)?$/);
+  if (isoMatch) {
+    const y = isoMatch[1];
+    const m = parseInt(isoMatch[2], 10);
+    const d = parseInt(isoMatch[3], 10);
+    if (d >= 1 && d <= 31 && m >= 1 && m <= 12) {
+      return `${String(d).padStart(2, "0")}.${String(m).padStart(2, "0")}.${y}`;
+    }
+  }
+
+  // 4. Gün/Ay/Yıl veya Ay/Gün/Yıl: (1-2 basamak)[./-](1-2 basamak)[./-](2 veya 4 basamak)
+  const dmyMatch = str.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})$/);
+  if (dmyMatch) {
+    const p1 = parseInt(dmyMatch[1], 10);
+    const p2 = parseInt(dmyMatch[2], 10);
+    const rawYear = dmyMatch[3];
+
+    let day = 0;
+    let month = 0;
+
+    if (p2 > 12 && p1 <= 12 && p2 <= 31) {
+      // Ay önce yazılmış (ABD / Excel formatı: MM/DD/YY -> örn: 9/25/26)
+      day = p2;
+      month = p1;
+    } else if (p1 <= 31 && p2 <= 12) {
+      // Standart format: GG.AA.YYYY (örn: 25.09.26 veya 5.9.2026)
+      day = p1;
+      month = p2;
+    }
+
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      const y = rawYear.length === 2
+        ? (parseInt(rawYear, 10) > 40 ? `19${rawYear}` : `20${rawYear}`)
+        : rawYear;
+      return `${String(day).padStart(2, "0")}.${String(month).padStart(2, "0")}.${y}`;
+    }
+  }
+
+  return str;
+}
+
 export default function PdfFormTestPage() {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfBytes, setPdfBytes] = useState<ArrayBuffer | null>(null);
@@ -59,9 +150,24 @@ export default function PdfFormTestPage() {
   const [namingField, setNamingField] = useState<string>("");
   const [bulkFileName, setBulkFileName] = useState<string>("");
   const [bulkImages, setBulkImages] = useState<Record<string, BulkImageConfig>>({});
+  const [selectedFont, setSelectedFont] = useState<string>("calibri");
 
+  const fontCacheRef = useRef<Record<string, ArrayBuffer>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputsRef = useRef<{ [key: string]: HTMLInputElement | null }>({});
+
+  const loadFontBytes = async (fontPath: string): Promise<ArrayBuffer> => {
+    if (fontCacheRef.current[fontPath]) {
+      return fontCacheRef.current[fontPath];
+    }
+    const res = await fetch(fontPath);
+    if (!res.ok) {
+      throw new Error(`Yazı tipi (${fontPath}) yüklenemedi. Lütfen dosyanın public klasöründe bulunduğundan emin olun.`);
+    }
+    const buffer = await res.arrayBuffer();
+    fontCacheRef.current[fontPath] = buffer;
+    return buffer;
+  };
 
   const readFileAsArrayBuffer = (file: File): Promise<ArrayBuffer> => {
     return new Promise((resolve, reject) => {
@@ -261,13 +367,10 @@ export default function PdfFormTestPage() {
       // Register fontkit
       pdfDoc.registerFontkit(fontkit);
 
-      // Load Roboto font to support Turkish characters in text fields
-      setProcessingState("Türkçe karakter desteği için yazı tipi yükleniyor...");
-      const fontResponse = await fetch("/fonts/Roboto.ttf");
-      if (!fontResponse.ok) {
-        throw new Error("Yazı tipi (Roboto.ttf) yüklenemedi. Lütfen public/fonts klasöründe Roboto.ttf dosyasının bulunduğundan emin olun.");
-      }
-      const fontBytes = await fontResponse.arrayBuffer();
+      // Load selected font to support Turkish characters in text fields
+      const currentFontObj = AVAILABLE_FONTS.find(f => f.id === selectedFont) || AVAILABLE_FONTS[0];
+      setProcessingState(`"${currentFontObj.name}" yazı tipi hazırlanıyor...`);
+      const fontBytes = await loadFontBytes(currentFontObj.file);
       const customFont = await pdfDoc.embedFont(fontBytes);
 
       const form = pdfDoc.getForm();
@@ -276,23 +379,24 @@ export default function PdfFormTestPage() {
         if (field.type === "text") {
           const f = form.getField(field.name);
           if (f) {
+            const formattedVal = normalizeTurkishDate(field.value, field.name);
             try {
               if (f instanceof PDFTextField) {
-                f.setText(field.value);
+                f.setText(formattedVal);
                 f.updateAppearances(customFont);
               } else if (f instanceof PDFCheckBox) {
-                if (field.value.toLowerCase() === "true" || field.value.toLowerCase() === "yes" || field.value === "1") {
+                if (formattedVal.toLowerCase() === "true" || formattedVal.toLowerCase() === "yes" || formattedVal === "1") {
                   f.check();
                 } else {
                   f.uncheck();
                 }
                 f.updateAppearances();
               } else if ("setText" in f) {
-                (f as any).setText(field.value);
+                (f as any).setText(formattedVal);
                 if ("updateAppearances" in f && typeof (f as any).updateAppearances === "function") {
                   (f as any).updateAppearances(customFont);
                 }
-              } else if ("check" in f && (field.value.toLowerCase() === "true" || field.value.toLowerCase() === "yes" || field.value === "1")) {
+              } else if ("check" in f && (formattedVal.toLowerCase() === "true" || formattedVal.toLowerCase() === "yes" || formattedVal === "1")) {
                 (f as any).check();
                 if ("updateAppearances" in f && typeof (f as any).updateAppearances === "function") {
                   (f as any).updateAppearances();
@@ -404,11 +508,35 @@ export default function PdfFormTestPage() {
       const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
-      const json = XLSX.utils.sheet_to_json(worksheet, { raw: false, dateNF: "dd.mm.yyyy" });
 
-      if (json.length === 0) {
+      // Format any date cells directly in worksheet so sheet_to_json gets dd.mm.yyyy
+      for (const cellAddress in worksheet) {
+        if (cellAddress.startsWith("!")) continue;
+        const cell = (worksheet as any)[cellAddress];
+        if (!cell) continue;
+        if (cell.t === "d" && cell.v instanceof Date) {
+          const d = cell.v;
+          const day = String(d.getDate()).padStart(2, "0");
+          const month = String(d.getMonth() + 1).padStart(2, "0");
+          const year = d.getFullYear();
+          cell.w = `${day}.${month}.${year}`;
+        }
+      }
+
+      const rawJson = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { raw: false, dateNF: "dd.mm.yyyy" });
+
+      if (rawJson.length === 0) {
         throw new Error("Yüklenen dosyada veri bulunamadı.");
       }
+
+      // Normalize all date fields across all rows to gg.aa.yyyy (no abbreviation)
+      const json = rawJson.map((row) => {
+        const normalizedRow: Record<string, any> = {};
+        for (const [key, val] of Object.entries(row)) {
+          normalizedRow[key] = normalizeTurkishDate(val, key);
+        }
+        return normalizedRow;
+      });
 
       setBulkData(json);
       
@@ -441,12 +569,9 @@ export default function PdfFormTestPage() {
     setSuccess(null);
 
     try {
-      setProcessingState("Türkçe karakter desteği için yazı tipi yükleniyor...");
-      const fontResponse = await fetch("/fonts/Roboto.ttf");
-      if (!fontResponse.ok) {
-        throw new Error("Yazı tipi (Roboto.ttf) yüklenemedi. Lütfen public/fonts klasöründe Roboto.ttf dosyasının bulunduğundan emin olun.");
-      }
-      const fontBytes = await fontResponse.arrayBuffer();
+      const currentFontObj = AVAILABLE_FONTS.find(f => f.id === selectedFont) || AVAILABLE_FONTS[0];
+      setProcessingState(`"${currentFontObj.name}" yazı tipi hazırlanıyor...`);
+      const fontBytes = await loadFontBytes(currentFontObj.file);
 
       const zip = new JSZip();
       
@@ -525,7 +650,8 @@ export default function PdfFormTestPage() {
               } else {
                 const rowKeys = Object.keys(row);
                 const matchedKey = rowKeys.find(k => k.trim().toLowerCase() === field.name.trim().toLowerCase()) || field.name;
-                const val = row[matchedKey] !== undefined ? String(row[matchedKey]) : "";
+                const rawVal = row[matchedKey] !== undefined ? row[matchedKey] : "";
+                const val = normalizeTurkishDate(rawVal, field.name);
 
                 if (f instanceof PDFTextField) {
                   f.setText(val);
@@ -668,7 +794,21 @@ export default function PdfFormTestPage() {
               AcroForm içeren PDF dosyalarını yükleyin, form alanlarını dinamik olarak doldurun, resim/imza yerleştirin ve düzleştirip indirin.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 bg-zinc-900/90 border border-zinc-800 px-3 py-1.5 rounded-lg shadow-sm">
+              <Type className="size-3.5 text-zinc-400 shrink-0" />
+              <Label className="text-xs text-zinc-400 whitespace-nowrap">Yazı Tipi:</Label>
+              <NativeSelect
+                value={selectedFont}
+                onChange={(e) => setSelectedFont(e.target.value)}
+                className="h-7 text-xs py-0 border-zinc-700 bg-zinc-950 min-w-[170px]"
+                size="sm"
+              >
+                {AVAILABLE_FONTS.map((font) => (
+                  <option key={font.id} value={font.id}>{font.name}</option>
+                ))}
+              </NativeSelect>
+            </div>
             {pdfFile && (
               <Button 
                 variant="outline" 
@@ -726,14 +866,34 @@ export default function PdfFormTestPage() {
         ) : (
           /* Editor Layout */
           <div className="grid grid-cols-1 gap-8">
-            {/* File Info */}
-            <div className="flex items-center gap-4 bg-zinc-900/80 border border-zinc-800 p-4 rounded-xl">
-              <div className="bg-primary/10 p-3 rounded-lg border border-primary/20">
-                <FileText className="size-6 text-primary" />
+            {/* File Info & Global Font Settings */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-zinc-900/80 border border-zinc-800 p-4 rounded-xl">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="bg-primary/10 p-3 rounded-lg border border-primary/20 shrink-0">
+                  <FileText className="size-6 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate text-zinc-100">{pdfFile.name}</p>
+                  <p className="text-xs text-zinc-500">{(pdfFile.size / 1024).toFixed(1)} KB • {fields.length} form alanı bulundu</p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate text-zinc-100">{pdfFile.name}</p>
-                <p className="text-xs text-zinc-500">{(pdfFile.size / 1024).toFixed(1)} KB • {fields.length} form alanı bulundu</p>
+
+              {/* Font Selector in Toolbar */}
+              <div className="flex items-center gap-2.5 bg-zinc-950/70 border border-zinc-800 px-3.5 py-2 rounded-xl shrink-0">
+                <Type className="size-4 text-primary shrink-0" />
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs text-zinc-300 font-medium whitespace-nowrap">Yazı Tipi (Font):</Label>
+                  <NativeSelect
+                    value={selectedFont}
+                    onChange={(e) => setSelectedFont(e.target.value)}
+                    className="h-8 text-xs py-0 min-w-[190px] bg-zinc-900 border-zinc-700 font-medium"
+                    size="sm"
+                  >
+                    {AVAILABLE_FONTS.map((font) => (
+                      <option key={font.id} value={font.id}>{font.name}</option>
+                    ))}
+                  </NativeSelect>
+                </div>
               </div>
             </div>
 
@@ -805,12 +965,27 @@ export default function PdfFormTestPage() {
                         <div className="pt-1 flex-1 flex flex-col justify-end">
                           {field.type === "text" ? (
                             <div className="space-y-1.5">
-                              <Label className="text-xs text-zinc-400">Değer</Label>
+                              <div className="flex items-center justify-between">
+                                <Label className="text-xs text-zinc-400">Değer</Label>
+                                {/(tarih|date|dogum|giris|cikis|muayene|police|vize|bitis|baslangic)/i.test(field.name) && (
+                                  <span className="text-[10px] text-primary/80 font-mono font-medium">GG.AA.YYYY</span>
+                                )}
+                              </div>
                               <Input 
                                 type="text" 
-                                placeholder="Metin giriniz..." 
+                                placeholder={
+                                  /(tarih|date|dogum|giris|cikis|muayene|police|vize|bitis|baslangic)/i.test(field.name)
+                                    ? "GG.AA.YYYY (Örn: 25.09.2026)"
+                                    : "Metin giriniz..."
+                                } 
                                 value={field.value}
                                 onChange={(e) => handleTextInputChange(idx, e.target.value)}
+                                onBlur={(e) => {
+                                  const normalized = normalizeTurkishDate(e.target.value, field.name);
+                                  if (normalized !== e.target.value) {
+                                    handleTextInputChange(idx, normalized);
+                                  }
+                                }}
                                 className="border-zinc-800 bg-zinc-950 focus:border-zinc-700 text-sm text-zinc-200 h-9"
                               />
                             </div>
@@ -905,7 +1080,7 @@ export default function PdfFormTestPage() {
                         Excel Şablonunu İndirin
                       </h3>
                       <p className="text-xs text-zinc-400 leading-relaxed">
-                        PDF dosyanızdaki form alanlarına uygun olarak oluşturulmuş Excel şablonunu indirin ve verilerinizi (Türkçe karakterler dahil) bu dosyaya doldurun.
+                        PDF dosyanızdaki form alanlarına uygun olarak oluşturulmuş Excel şablonunu indirin ve verilerinizi bu dosyaya doldurun. Tarihler otomatik olarak kısaltmasız <strong>GG.AA.YYYY</strong> formatında işlenir.
                       </p>
                       <Button 
                         variant="outline" 

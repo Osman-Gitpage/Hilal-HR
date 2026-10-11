@@ -311,9 +311,14 @@ export function getValidMaasAtDate(
     return sorted[0].maas_net;
   }
 
-  // Eğer hedef tarihten önce başlamış hiçbir kayıt yoksa (gelecek tarihli ilk kayıtsa), en erken başlayanı dön
+  // Eğer hedef tarihten önce başlamış hiçbir kayıt yoksa:
+  // 1. Öncelikle güncel/açık olan aktif kaydı (gecerlilik_bitis === null) seç
+  const aktifKayit = maasGecmisi.find((m) => m.gecerlilik_bitis === null);
+  if (aktifKayit) return aktifKayit.maas_net;
+
+  // 2. Aktif kayıt da yoksa başlangıç tarihine göre en son/güncel kaydı dön
   const sortedAll = [...maasGecmisi].sort((a, b) =>
-    a.gecerlilik_baslangic.localeCompare(b.gecerlilik_baslangic)
+    b.gecerlilik_baslangic.localeCompare(a.gecerlilik_baslangic)
   );
   return sortedAll[0]?.maas_net ?? null;
 }

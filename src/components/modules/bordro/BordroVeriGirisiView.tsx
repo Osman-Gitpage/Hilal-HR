@@ -119,7 +119,8 @@ export function BordroVeriGirisiView() {
 
   // ── Seçilen personelin seçili dönemde geçerli olan maaşı ──
   const seciliPersonel = personeller.find((p) => p.id === seciliPersonelId);
-  const donemTarihStr = `${seciliDonemYil}-${String(seciliDonemAy).padStart(2, "0")}-01`;
+  const sonGun = new Date(seciliDonemYil, seciliDonemAy, 0).getDate();
+  const donemTarihStr = `${seciliDonemYil}-${String(seciliDonemAy).padStart(2, "0")}-${String(sonGun).padStart(2, "0")}`;
   const aktifMaas = getValidMaasAtDate(seciliPersonel?.maas_gecmisi, donemTarihStr) ?? 0;
 
   // ── Form state (useReducer) + memoized hesaplama ──

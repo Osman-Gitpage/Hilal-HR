@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import {
   Plus, Search, List, LayoutGrid, FileText, TrendingUp,
   CheckSquare, Square, AlertCircle,
@@ -9,7 +10,7 @@ import {
   FileCheck2, CreditCard, FileSpreadsheet, Ship, CalendarDays,
   ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal,
   X, Sparkles, ChevronLeft,
-  Download, FileDown,
+  Download, FileDown, Edit3, Trash2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -37,12 +38,30 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-import { useBelgeList, useCariKpi, useFirmaList } from "@/hooks/useCari";
+import { useBelgeList, useCariKpi, useFirmaList, useBelgeSil } from "@/hooks/useCari";
 import { paraFormat, formatKur, tarihFormat } from "@/lib/cari";
 import type { BelgeListItem, BelgeTur, OdemeDurumu, ParaBirimi, BelgeListFiltre } from "@/types/cari";
 import { TopluOdemeModal } from "./TopluOdemeModal";
 import { BelgeImportModal } from "./BelgeImportModal";
+import { HizliDuzenleModal } from "./HizliDuzenleModal";
 import { cariListeExcel } from "@/lib/excel/cariExport";
 import { cariListePdf, seciliBelgelerPdf } from "@/lib/pdf/cariPdf";
 
@@ -355,177 +374,266 @@ function SiralamaBaslik({
 
 // ─── Tablo Satırı ─────────────────────────────────────────────────────────────
 
-function BelgeSatiri({ belge, secili, onSecToggle, onClick }: {
+function BelgeSatiri({
+  belge,
+  secili,
+  onSecToggle,
+  onClick,
+  onHizliDuzenle,
+  onDuzenle,
+  onSil,
+}: {
   belge: BelgeListItem;
   secili: boolean;
   onSecToggle: () => void;
   onClick: () => void;
+  onHizliDuzenle: (belge: BelgeListItem) => void;
+  onDuzenle: (belge: BelgeListItem) => void;
+  onSil: (belge: BelgeListItem) => void;
 }) {
   return (
-    <TableRow
-      className={`group cursor-pointer transition-all duration-150 border-0 border-b border-border/50
-        ${belge.gecikmiş ? "bg-rose-50/40 dark:bg-rose-950/15 hover:bg-rose-50/70 dark:hover:bg-rose-950/25" : "hover:bg-muted/40"}
-        ${secili ? "bg-primary/5 dark:bg-primary/8" : ""}
-      `}
-    >
-      <TableCell className="w-10 py-3" onClick={(e) => { e.stopPropagation(); onSecToggle(); }}>
-        <button className="flex items-center justify-center text-muted-foreground hover:text-primary transition-colors">
-          {secili ? (
-            <CheckSquare className="h-3.5 w-3.5 text-primary" />
-          ) : (
-            <Square className="h-3.5 w-3.5 opacity-30 group-hover:opacity-60" />
-          )}
-        </button>
-      </TableCell>
-      <TableCell onClick={onClick} className="py-3 font-mono text-xs font-bold tracking-wide text-foreground/80">
-        {belge.belge_no}
-      </TableCell>
-      <TableCell onClick={onClick} className="py-3">
-        <TurBadge tur={belge.tur} />
-      </TableCell>
-      <TableCell onClick={onClick} className="py-3 text-xs text-muted-foreground whitespace-nowrap tabular-nums">
-        {tarihFormat(belge.tarih)}
-      </TableCell>
-      <TableCell onClick={onClick} className="py-3 max-w-[150px] truncate text-sm text-foreground/90">
-        {belge.aciklama}
-      </TableCell>
-      <TableCell onClick={onClick} className="py-3">
-        {belge.gemi_adi ? (
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Ship className="h-3 w-3 shrink-0" />
-            <span className="truncate max-w-[90px]">{belge.gemi_adi}</span>
-          </span>
-        ) : (
-          <span className="text-muted-foreground/25 text-xs">—</span>
+    <ContextMenu>
+      <ContextMenuTrigger
+        render={(triggerProps) => (
+          <TableRow
+            {...triggerProps}
+            className={`group cursor-pointer transition-all duration-150 border-0 border-b border-border/50
+              ${belge.gecikmiş ? "bg-rose-50/40 dark:bg-rose-950/15 hover:bg-rose-50/70 dark:hover:bg-rose-950/25" : "hover:bg-muted/40"}
+              ${secili ? "bg-primary/5 dark:bg-primary/8" : ""}
+              ${triggerProps.className ?? ""}
+            `}
+          >
+            <TableCell className="w-10 py-3" onClick={(e) => { e.stopPropagation(); onSecToggle(); }}>
+              <button className="flex items-center justify-center text-muted-foreground hover:text-primary transition-colors">
+                {secili ? (
+                  <CheckSquare className="h-3.5 w-3.5 text-primary" />
+                ) : (
+                  <Square className="h-3.5 w-3.5 opacity-30 group-hover:opacity-60" />
+                )}
+              </button>
+            </TableCell>
+            <TableCell onClick={onClick} className="py-3 font-mono text-xs font-bold tracking-wide text-foreground/80">
+              {belge.belge_no}
+            </TableCell>
+            <TableCell onClick={onClick} className="py-3">
+              <TurBadge tur={belge.tur} />
+            </TableCell>
+            <TableCell onClick={onClick} className="py-3 text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+              {tarihFormat(belge.tarih)}
+            </TableCell>
+            <TableCell onClick={onClick} className="py-3 max-w-[150px] truncate text-sm text-foreground/90">
+              {belge.aciklama}
+            </TableCell>
+            <TableCell onClick={onClick} className="py-3">
+              {belge.gemi_adi ? (
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Ship className="h-3 w-3 shrink-0" />
+                  <span className="truncate max-w-[90px]">{belge.gemi_adi}</span>
+                </span>
+              ) : (
+                <span className="text-muted-foreground/25 text-xs">—</span>
+              )}
+            </TableCell>
+            <TableCell onClick={onClick} className="py-3">
+              {belge.firma_ad ? (
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Building2 className="h-3 w-3 shrink-0" />
+                  <span className="truncate max-w-[100px]">{belge.firma_ad}</span>
+                </span>
+              ) : (
+                <span className="text-muted-foreground/25 text-xs">—</span>
+              )}
+            </TableCell>
+            <TableCell onClick={onClick} className="py-3 text-right font-bold tabular-nums text-sm">
+              {paraFormat(belge.tutar, belge.para_birimi)}
+              {belge.para_birimi !== "TRY" && belge.kur !== 1 && (
+                <div className="text-[10px] text-muted-foreground/50 font-normal">kur {formatKur(belge.kur)}</div>
+              )}
+            </TableCell>
+            <TableCell onClick={onClick} className="py-3 text-right tabular-nums text-sm">
+              {belge.kalan > 0 ? (
+                <span className={`font-semibold ${belge.gecikmiş ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400"}`}>
+                  {paraFormat(
+                    belge.para_birimi !== "TRY" && belge.kur > 0
+                      ? belge.kalan / belge.kur
+                      : belge.kalan,
+                    belge.para_birimi
+                  )}
+                </span>
+              ) : (
+                <span className="text-emerald-500 dark:text-emerald-400 text-[11px] font-semibold">✓ Kapandı</span>
+              )}
+            </TableCell>
+            <TableCell onClick={onClick} className="py-3">
+              <DurumBadge durum={belge.odeme_durumu} gecikmiş={belge.gecikmiş} />
+            </TableCell>
+            <TableCell onClick={onClick} className="py-3 w-8">
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/20 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+            </TableCell>
+          </TableRow>
         )}
-      </TableCell>
-      <TableCell onClick={onClick} className="py-3">
-        {belge.firma_ad ? (
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Building2 className="h-3 w-3 shrink-0" />
-            <span className="truncate max-w-[100px]">{belge.firma_ad}</span>
-          </span>
-        ) : (
-          <span className="text-muted-foreground/25 text-xs">—</span>
-        )}
-      </TableCell>
-      <TableCell onClick={onClick} className="py-3 text-right font-bold tabular-nums text-sm">
-        {paraFormat(belge.tutar, belge.para_birimi)}
-        {belge.para_birimi !== "TRY" && belge.kur !== 1 && (
-          <div className="text-[10px] text-muted-foreground/50 font-normal">kur {formatKur(belge.kur)}</div>
-        )}
-      </TableCell>
-      <TableCell onClick={onClick} className="py-3 text-right tabular-nums text-sm">
-        {belge.kalan > 0 ? (
-          <span className={`font-semibold ${belge.gecikmiş ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400"}`}>
-            {paraFormat(
-              belge.para_birimi !== "TRY" && belge.kur > 0
-                ? belge.kalan / belge.kur
-                : belge.kalan,
-              belge.para_birimi
-            )}
-          </span>
-        ) : (
-          <span className="text-emerald-500 dark:text-emerald-400 text-[11px] font-semibold">✓ Kapandı</span>
-        )}
-      </TableCell>
-      <TableCell onClick={onClick} className="py-3">
-        <DurumBadge durum={belge.odeme_durumu} gecikmiş={belge.gecikmiş} />
-      </TableCell>
-      <TableCell onClick={onClick} className="py-3 w-8">
-        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/20 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-      </TableCell>
-    </TableRow>
+      />
+      <ContextMenuContent className="w-48">
+        <ContextMenuItem
+          onClick={() => onHizliDuzenle(belge)}
+          className="gap-2 cursor-pointer text-xs"
+        >
+          <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+          <span>Hızlı Düzenle</span>
+        </ContextMenuItem>
+        <ContextMenuItem
+          onClick={() => onDuzenle(belge)}
+          className="gap-2 cursor-pointer text-xs"
+        >
+          <Edit3 className="h-3.5 w-3.5 text-blue-500" />
+          <span>Düzenle</span>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          variant="destructive"
+          onClick={() => onSil(belge)}
+          className="gap-2 cursor-pointer text-xs text-rose-600 dark:text-rose-400"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          <span>Sil</span>
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
 // ─── Izgara Kartı ─────────────────────────────────────────────────────────────
 
-function BelgeKarti({ belge, secili, onSecToggle, onClick }: {
+function BelgeKarti({
+  belge,
+  secili,
+  onSecToggle,
+  onClick,
+  onHizliDuzenle,
+  onDuzenle,
+  onSil,
+}: {
   belge: BelgeListItem;
   secili: boolean;
   onSecToggle: () => void;
   onClick: () => void;
+  onHizliDuzenle: (belge: BelgeListItem) => void;
+  onDuzenle: (belge: BelgeListItem) => void;
+  onSil: (belge: BelgeListItem) => void;
 }) {
   return (
-    <div
-      onClick={onClick}
-      className={`group relative rounded-2xl border bg-card p-5 cursor-pointer transition-all duration-200
-        hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:-translate-y-0.5
-        ${belge.gecikmiş
-          ? "border-rose-200 dark:border-rose-900/60 bg-rose-50/30 dark:bg-rose-950/10"
-          : secili
-          ? "border-primary/40 ring-2 ring-primary/10"
-          : "border-border/60 hover:border-border"
-        }`}
-    >
-      {/* Checkbox */}
-      <button
-        className="absolute top-3.5 right-3.5 text-muted-foreground hover:text-primary transition-colors z-10"
-        onClick={(e) => { e.stopPropagation(); onSecToggle(); }}
-      >
-        {secili ? (
-          <CheckSquare className="h-4 w-4 text-primary" />
-        ) : (
-          <Square className="h-4 w-4 opacity-20 group-hover:opacity-50" />
-        )}
-      </button>
-
-      {/* Üst */}
-      <div className="flex items-center gap-2 mb-2 pr-7">
-        <TurBadge tur={belge.tur} />
-        <span className="font-mono text-[11px] font-bold text-muted-foreground/60 truncate">
-          {belge.belge_no}
-        </span>
-      </div>
-
-      <p className="text-sm font-semibold truncate mb-3 text-foreground/90">{belge.aciklama}</p>
-
-      {/* Meta */}
-      <div className="space-y-1 mb-3">
-        {belge.gemi_adi && (
-          <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 truncate">
-            <Ship className="h-3 w-3 shrink-0 opacity-60" />
-            {belge.gemi_adi}
-          </p>
-        )}
-        {belge.firma_ad && (
-          <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 truncate">
-            <Building2 className="h-3 w-3 shrink-0 opacity-60" />
-            {belge.firma_ad}
-          </p>
-        )}
-        <p className="text-[11px] text-muted-foreground/60 flex items-center gap-1.5">
-          <CalendarDays className="h-3 w-3 shrink-0" />
-          {tarihFormat(belge.tarih)}
-        </p>
-      </div>
-
-      {/* Alt */}
-      <div className="border-t border-border/40 pt-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] text-muted-foreground">Tutar</span>
-          <span className="text-sm font-bold tabular-nums">{paraFormat(belge.tutar, belge.para_birimi)}</span>
-        </div>
-        {belge.kalan > 0 && (
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-muted-foreground">Kalan</span>
-            <span className={`text-sm font-semibold tabular-nums ${belge.gecikmiş ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400"}`}>
-              {paraFormat(
-                belge.para_birimi !== "TRY" && belge.kur > 0
-                  ? belge.kalan / belge.kur
-                  : belge.kalan,
-                belge.para_birimi
+    <ContextMenu>
+      <ContextMenuTrigger
+        render={(triggerProps) => (
+          <div
+            {...triggerProps}
+            onClick={onClick}
+            className={`group relative rounded-2xl border bg-card p-5 cursor-pointer transition-all duration-200
+              hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:-translate-y-0.5
+              ${belge.gecikmiş
+                ? "border-rose-200 dark:border-rose-900/60 bg-rose-50/30 dark:bg-rose-950/10"
+                : secili
+                ? "border-primary/40 ring-2 ring-primary/10"
+                : "border-border/60 hover:border-border"
+              }
+              ${triggerProps.className ?? ""}
+            `}
+          >
+            {/* Checkbox */}
+            <button
+              className="absolute top-3.5 right-3.5 text-muted-foreground hover:text-primary transition-colors z-10"
+              onClick={(e) => { e.stopPropagation(); onSecToggle(); }}
+            >
+              {secili ? (
+                <CheckSquare className="h-4 w-4 text-primary" />
+              ) : (
+                <Square className="h-4 w-4 opacity-20 group-hover:opacity-50" />
               )}
-            </span>
+            </button>
+
+            {/* Üst */}
+            <div className="flex items-center gap-2 mb-2 pr-7">
+              <TurBadge tur={belge.tur} />
+              <span className="font-mono text-[11px] font-bold text-muted-foreground/60 truncate">
+                {belge.belge_no}
+              </span>
+            </div>
+
+            <p className="text-sm font-semibold truncate mb-3 text-foreground/90">{belge.aciklama}</p>
+
+            {/* Meta */}
+            <div className="space-y-1 mb-3">
+              {belge.gemi_adi && (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 truncate">
+                  <Ship className="h-3 w-3 shrink-0 opacity-60" />
+                  {belge.gemi_adi}
+                </p>
+              )}
+              {belge.firma_ad && (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 truncate">
+                  <Building2 className="h-3 w-3 shrink-0 opacity-60" />
+                  {belge.firma_ad}
+                </p>
+              )}
+              <p className="text-[11px] text-muted-foreground/60 flex items-center gap-1.5">
+                <CalendarDays className="h-3 w-3 shrink-0" />
+                {tarihFormat(belge.tarih)}
+              </p>
+            </div>
+
+            {/* Alt */}
+            <div className="border-t border-border/40 pt-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-muted-foreground">Tutar</span>
+                <span className="text-sm font-bold tabular-nums">{paraFormat(belge.tutar, belge.para_birimi)}</span>
+              </div>
+              {belge.kalan > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-muted-foreground">Kalan</span>
+                  <span className={`text-sm font-semibold tabular-nums ${belge.gecikmiş ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400"}`}>
+                    {paraFormat(
+                      belge.para_birimi !== "TRY" && belge.kur > 0
+                        ? belge.kalan / belge.kur
+                        : belge.kalan,
+                      belge.para_birimi
+                    )}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <DurumBadge durum={belge.odeme_durumu} gecikmiş={belge.gecikmiş} />
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/20 group-hover:text-primary transition-colors" />
+              </div>
+            </div>
           </div>
         )}
-        <div className="flex items-center justify-between">
-          <DurumBadge durum={belge.odeme_durumu} gecikmiş={belge.gecikmiş} />
-          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/20 group-hover:text-primary transition-colors" />
-        </div>
-      </div>
-    </div>
+      />
+      <ContextMenuContent className="w-48">
+        <ContextMenuItem
+          onClick={() => onHizliDuzenle(belge)}
+          className="gap-2 cursor-pointer text-xs"
+        >
+          <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+          <span>Hızlı Düzenle</span>
+        </ContextMenuItem>
+        <ContextMenuItem
+          onClick={() => onDuzenle(belge)}
+          className="gap-2 cursor-pointer text-xs"
+        >
+          <Edit3 className="h-3.5 w-3.5 text-blue-500" />
+          <span>Düzenle</span>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          variant="destructive"
+          onClick={() => onSil(belge)}
+          className="gap-2 cursor-pointer text-xs text-rose-600 dark:text-rose-400"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          <span>Sil</span>
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -639,6 +747,43 @@ export function BelgeListesiView() {
   const [seciliIds, setSeciliIds] = React.useState<Set<string>>(new Set());
   const [topluOdemeAcik, setTopluOdemeAcik] = React.useState(false);
   const [importModalAcik, setImportModalAcik] = React.useState(false);
+  const [hizliDuzenleBelge, setHizliDuzenleBelge] = React.useState<BelgeListItem | null>(null);
+  const [silinecekBelge, setSilinecekBelge] = React.useState<BelgeListItem | null>(null);
+  const { mutateAsync: belgeSil, isPending: siliniyor } = useBelgeSil();
+
+  const handleHizliDuzenle = (b: BelgeListItem) => {
+    setHizliDuzenleBelge(b);
+  };
+
+  const handleDuzenle = (b: BelgeListItem) => {
+    router.push(`/cari/belge/${b.id}/duzenle`);
+  };
+
+  const handleSilOnay = (b: BelgeListItem) => {
+    setSilinecekBelge(b);
+  };
+
+  const handleBelgeSil = async () => {
+    if (!silinecekBelge) return;
+    try {
+      const res = await belgeSil(silinecekBelge.id);
+      if (res.basarili) {
+        toast.success("Belge başarıyla silindi.");
+        setSeciliIds((prev) => {
+          const next = new Set(prev);
+          next.delete(silinecekBelge.id);
+          return next;
+        });
+      } else {
+        toast.error(`Hata: ${res.hata}`);
+      }
+    } catch {
+      toast.error("Belge silinirken bir hata oluştu.");
+    } finally {
+      setSilinecekBelge(null);
+    }
+  };
+
   const [sayfa, setSayfa] = React.useState(1);
   const [exportMenuAcik, setExportMenuAcik] = React.useState(false);
   const [exportYukleniyor, setExportYukleniyor] = React.useState<"excel" | "pdf" | "secili-pdf" | null>(null);
@@ -1189,6 +1334,9 @@ export function BelgeListesiView() {
                     secili={seciliIds.has(belge.id)}
                     onSecToggle={() => toggleSec(belge.id)}
                     onClick={() => router.push(`/cari/belge/${belge.id}`)}
+                    onHizliDuzenle={handleHizliDuzenle}
+                    onDuzenle={handleDuzenle}
+                    onSil={handleSilOnay}
                   />
                 ))}
               </TableBody>
@@ -1259,6 +1407,9 @@ export function BelgeListesiView() {
                   secili={seciliIds.has(belge.id)}
                   onSecToggle={() => toggleSec(belge.id)}
                   onClick={() => router.push(`/cari/belge/${belge.id}`)}
+                  onHizliDuzenle={handleHizliDuzenle}
+                  onDuzenle={handleDuzenle}
+                  onSil={handleSilOnay}
                 />
               ))}
             </div>
@@ -1371,6 +1522,41 @@ export function BelgeListesiView() {
           acik={importModalAcik}
           onKapat={() => setImportModalAcik(false)}
         />
+
+        {/* ── Hızlı Düzenle Modal ── */}
+        <HizliDuzenleModal
+          belge={hizliDuzenleBelge}
+          acik={!!hizliDuzenleBelge}
+          onKapat={() => setHizliDuzenleBelge(null)}
+        />
+
+        {/* ── Belge Silme Onay Modalı ── */}
+        <AlertDialog
+          open={!!silinecekBelge}
+          onOpenChange={(open) => {
+            if (!open) setSilinecekBelge(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Belgeyi Sil?</AlertDialogTitle>
+              <AlertDialogDescription>
+                <span className="font-semibold text-foreground">{silinecekBelge?.belge_no}</span> numaralı belge ve ilişkili tüm ödeme/dosya kayıtları kalıcı olarak silinecek. Bu işlem geri alınamaz.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={siliniyor}>İptal</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleBelgeSil}
+                disabled={siliniyor}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-1.5"
+              >
+                {siliniyor && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {siliniyor ? "Siliniyor…" : "Evet, Sil"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </TooltipProvider>
   );
