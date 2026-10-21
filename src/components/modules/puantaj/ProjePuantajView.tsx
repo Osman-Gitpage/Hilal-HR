@@ -9,6 +9,8 @@ import {
   Loader2,
   ArrowUp,
   ArrowDown,
+  SquareMousePointer,
+  X,
 } from "lucide-react";
 import { compareValues, type SortDir } from "@/lib/utils/sort";
 import { Button } from "@/components/ui/button";
@@ -36,16 +38,16 @@ import {
   useProjePuantajVeGenelGir,
   useProjePuantajVeGenelSil,
   useAyPuantaj,
+  useTopluProjePuantajGirisi,
   type ProjePuantajSatir,
 } from "@/hooks/usePuantaj";
 import { OZEL_DURUMLAR } from "@/lib/constants";
 import type { Proje } from "@/supabase/app-types";
-import type { OzelDurum } from "@/types";
+import type { OzelDurum, PuantajGunVerisi } from "@/types";
 import { GunVeriGirisiModal } from "./GunVeriGirisiModal";
 import { TopluGunGirisiPanel } from "./TopluGunGirisiPanel";
 import Link from "next/link";
 import { ExcelExportButton } from "@/components/ui/ExcelExportButton";
-import { useTopluProjePuantajGirisi } from "@/hooks/usePuantaj";
 import { PdfOnizleButton } from "@/components/ui/PdfOnizleButton";
 import { projePuantajPdfOnizle } from "@/lib/pdf/puantajPdf";
 import { yevmiyeCizelgesiPdfOnizle } from "@/lib/pdf/yevmiyeCizelgesiPdf";
@@ -118,10 +120,16 @@ export function ProjePuantajHucre({
   durum,
   pazar,
   onClick,
+  secili,
+  secimModu,
 }: {
   durum?: HucreDurumu;
   pazar: boolean;
   onClick: () => void;
+  /** Hücre seçim modunda seçili mi? */
+  secili?: boolean;
+  /** Hücre seçim modu aktif mi? */
+  secimModu?: boolean;
 }) {
   let icerik: React.ReactNode = (
     <span className="text-muted-foreground/30 text-xs">—</span>
@@ -156,13 +164,25 @@ export function ProjePuantajHucre({
         onClick={onClick}
         className={[
           "w-full h-9 rounded flex flex-col items-center justify-center transition-colors text-xs",
-          hucreRenk,
-          "hover:ring-2 hover:ring-primary/40 cursor-pointer",
+          secili
+            ? "ring-2 ring-primary bg-primary/10"
+            : hucreRenk,
+          secimModu
+            ? "hover:ring-2 hover:ring-primary/60 cursor-cell"
+            : "hover:ring-2 hover:ring-primary/40 cursor-pointer",
         ].join(" ")}
-        title={durum?.aciklama ?? undefined}
+        title={
+          secimModu
+            ? secili ? "Seçimi kaldır" : "Hücreyi seç"
+            : durum?.aciklama ?? undefined
+        }
       >
+        {/* Seçili overlay */}
+        {secili && (
+          <span className="absolute top-0.5 left-0.5 text-primary leading-none text-[9px] font-bold">✓</span>
+        )}
         {icerik}
-        {(() => {
+        {!secimModu && (() => {
           // PM ise mesai_saati yoksa oz.mesai (16) fallback
           const oz = durum?.ozel_durum ? OZEL_DURUMLAR[durum.ozel_durum as keyof typeof OZEL_DURUMLAR] : null;
           const m = durum?.mesai_saati ?? (oz?.mesai && oz.mesai > 0 ? oz.mesai : null);
@@ -171,7 +191,7 @@ export function ProjePuantajHucre({
           ) : null;
         })()}
       </button>
-      {durum?.aciklama && (
+      {durum?.aciklama && !secimModu && (
         <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
       )}
     </div>
@@ -232,6 +252,57 @@ export function ProjePuantajView() {
     tarih: string;
     mevcutVeri?: HucreDurumu;
   } | null>(null);
+
+  // ── Hücre seçim modu ──
+  const [hucreSecimModu, setHucreSecimModu] = useState(false);
+  const [secilenHucreler, setSecilenHucreler] = useState<Set<string>>(new Set()); // "personelId|tarih"
+  const [topluModalAcik, setTopluModalAcik] = useState(false);
+
+  // Dönem veya proje değişince seçimi sıfırla
+  useEffect(() => {
+    setHucreSecimModu(false);
+    setSecilenHucreler(new Set());
+    setTopluModalAcik(false);
+  }, [yil, ay, seciliProjeId]);
+
+  // ESC tuşuyla seçim modundan çık
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && hucreSecimModu) {
+        setHucreSecimModu(false);
+        setSecilenHucreler(new Set());
+        setTopluModalAcik(false);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [hucreSecimModu]);
+
+  // "Hücre Girişi" butonu toggle mantığı
+  function handleHucreSecimToggle() {
+    if (!hucreSecimModu) {
+      setHucreSecimModu(true);
+      setSecilenHucreler(new Set());
+    } else if (secilenHucreler.size > 0) {
+      setTopluModalAcik(true);
+    } else {
+      setHucreSecimModu(false);
+    }
+  }
+
+  // Seçili hücrelere toplu veri uygula (proje + genel)
+  async function handleTopluHucreKaydet(veri: PuantajGunVerisi) {
+    const kayitlar = Array.from(secilenHucreler).map((key) => {
+      const [personelId, tarih] = key.split("|");
+      return { personelId, tarih, veri };
+    });
+    const sonuc = await topluGirisMutation.mutateAsync(kayitlar) as {
+      hata?: string;
+      eklenenSayisi?: number;
+      atlananSayisi?: number;
+    };
+    return { hata: sonuc?.hata, eklenenSayisi: sonuc?.eklenenSayisi };
+  }
 
   // Ayın günleri
   const gunler = useMemo(() => {
@@ -393,6 +464,25 @@ export function ProjePuantajView() {
             Toplu Giriş
           </Button>
         )}
+
+        {/* Hücre Girişi Toggle */}
+        {seciliProjeId && !isLoading && (
+          <Button
+            id="btn-proje-hucre-secim-toggle"
+            variant={hucreSecimModu ? "default" : "outline"}
+            size="sm"
+            onClick={handleHucreSecimToggle}
+            className="gap-1.5"
+          >
+            <SquareMousePointer className="h-4 w-4" />
+            Hücre Girişi
+            {hucreSecimModu && secilenHucreler.size > 0 && (
+              <Badge variant="secondary" className="ml-0.5 text-xs px-1.5 py-0 h-4">
+                {secilenHucreler.size}
+              </Badge>
+            )}
+          </Button>
+        )}
       </div>
 
       {/* Toplu Giriş Paneli */}
@@ -413,6 +503,34 @@ export function ProjePuantajView() {
           }
         />
       )}
+
+      {/* Hücre Seçim Modu — bilgi şeridi */}
+      {hucreSecimModu && (
+        <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
+          <SquareMousePointer className="h-3.5 w-3.5 shrink-0" />
+          <span>
+            Hücre seçim modu aktif — hücrelere tıklayarak seçin, ardından{" "}
+            <strong>Hücre Girişi</strong> butonuna tekrar tıklayın.
+          </span>
+          {secilenHucreler.size > 0 && (
+            <span className="font-semibold ml-1">
+              {secilenHucreler.size} hücre seçili
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setHucreSecimModu(false);
+              setSecilenHucreler(new Set());
+            }}
+            className="ml-auto text-muted-foreground hover:text-foreground transition-colors"
+            title="Seçim modunu kapat"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {seciliProjeId && (
         <div className="rounded-xl border bg-card overflow-x-auto">
           <Table className="text-xs">
@@ -542,14 +660,26 @@ export function ProjePuantajView() {
                             <ProjePuantajHucre
                               durum={hucreDurum}
                               pazar={pazar}
-                              onClick={() =>
-                                setSecilenHucre({
-                                  personelId: p.id,
-                                  personelAd: `${p.ad} ${p.soyad}`,
-                                  tarih: tarihStr,
-                                  mevcutVeri: modalVeri,
-                                })
-                              }
+                              secimModu={hucreSecimModu}
+                              secili={secilenHucreler.has(`${p.id}|${tarihStr}`)}
+                              onClick={() => {
+                                if (hucreSecimModu) {
+                                  const key = `${p.id}|${tarihStr}`;
+                                  setSecilenHucreler((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(key)) next.delete(key);
+                                    else next.add(key);
+                                    return next;
+                                  });
+                                } else {
+                                  setSecilenHucre({
+                                    personelId: p.id,
+                                    personelAd: `${p.ad} ${p.soyad}`,
+                                    tarih: tarihStr,
+                                    mevcutVeri: modalVeri,
+                                  });
+                                }
+                              }}
                             />
                           </TableCell>
                         );
@@ -606,6 +736,26 @@ export function ProjePuantajView() {
               tarih: secilenHucre.tarih,
             });
             return sonuc;
+          }}
+        />
+      )}
+
+      {/* Hücre Seçim Modu — Toplu Veri Girişi Modal */}
+      {topluModalAcik && (
+        <GunVeriGirisiModal
+          key="toplu-proje-hucre-girisi"
+          acik={topluModalAcik}
+          personelId=""
+          personelAd=""
+          tarih=""
+          yil={yil}
+          ay={ay}
+          topluHucreSayisi={secilenHucreler.size}
+          onTopluKaydet={handleTopluHucreKaydet}
+          onKapat={() => {
+            setTopluModalAcik(false);
+            setHucreSecimModu(false);
+            setSecilenHucreler(new Set());
           }}
         />
       )}

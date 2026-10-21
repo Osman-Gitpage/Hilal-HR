@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   ArrowUp,
   ArrowDown,
@@ -8,6 +8,8 @@ import {
   Filter,
   Loader2,
   CalendarDays,
+  SquareMousePointer,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +27,7 @@ import {
   useAyPuantaj,
   useProjePuantajVeGenelGir,
   useProjePuantajVeGenelSil,
+  useTopluProjePuantajGirisi,
   type ProjePuantajSatir,
 } from "@/hooks/usePuantaj";
 import { compareValues, type SortDir } from "@/lib/utils/sort";
@@ -34,7 +37,7 @@ import { ExcelExportButton } from "@/components/ui/ExcelExportButton";
 import { PdfOnizleButton } from "@/components/ui/PdfOnizleButton";
 import { projePuantajPdfOnizle } from "@/lib/pdf/puantajPdf";
 import { projePuantajExport } from "@/lib/excel/puantajExport";
-import type { OzelDurum } from "@/types";
+import type { OzelDurum, PuantajGunVerisi } from "@/types";
 
 const AY_ADLARI = [
   "", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
@@ -74,13 +77,67 @@ export function ProjeAyPuantajTablosu({
   const veriGirMutation = useProjePuantajVeGenelGir(projeId, yil, ay);
   const veriSilMutation = useProjePuantajVeGenelSil(projeId, yil, ay);
 
-  // Modal durumu
+  // Toplu giriş mutation (hem proje hem genel'e yazar)
+  const topluGirMutation = useTopluProjePuantajGirisi(projeId, yil, ay);
+
+  // Tekli modal durumu
   const [secilenHucre, setSecilenHucre] = useState<{
     personelId: string;
     personelAd: string;
     tarih: string;
     mevcutVeri?: HucreDurumu;
   } | null>(null);
+
+  // ── Hücre seçim modu ──
+  const [hucreSecimModu, setHucreSecimModu] = useState(false);
+  const [secilenHucreler, setSecilenHucreler] = useState<Set<string>>(new Set()); // "personelId|tarih"
+  const [topluModalAcik, setTopluModalAcik] = useState(false);
+
+  // Dönem değişince seçimi sıfırla
+  useEffect(() => {
+    setHucreSecimModu(false);
+    setSecilenHucreler(new Set());
+    setTopluModalAcik(false);
+  }, [yil, ay, projeId]);
+
+  // ESC tuşuyla seçim modundan çık
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && hucreSecimModu) {
+        setHucreSecimModu(false);
+        setSecilenHucreler(new Set());
+        setTopluModalAcik(false);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [hucreSecimModu]);
+
+  // "Hücre Girişi" butonu toggle mantığı
+  function handleHucreSecimToggle() {
+    if (!hucreSecimModu) {
+      setHucreSecimModu(true);
+      setSecilenHucreler(new Set());
+    } else if (secilenHucreler.size > 0) {
+      setTopluModalAcik(true);
+    } else {
+      setHucreSecimModu(false);
+    }
+  }
+
+  // Seçili hücrelere toplu veri uygula (proje + genel)
+  async function handleTopluHucreKaydet(veri: PuantajGunVerisi) {
+    const kayitlar = Array.from(secilenHucreler).map((key) => {
+      const [personelId, tarih] = key.split("|");
+      return { personelId, tarih, veri };
+    });
+    const sonuc = await topluGirMutation.mutateAsync(kayitlar) as {
+      hata?: string;
+      eklenenSayisi?: number;
+      atlananSayisi?: number;
+    };
+    return { hata: sonuc?.hata, eklenenSayisi: sonuc?.eklenenSayisi };
+  }
 
   // Ay günleri
   const gunler = useMemo(() => {
@@ -211,6 +268,26 @@ export function ProjeAyPuantajTablosu({
             {sadeceCalisanlar ? "Tüm Personelleri Göster" : "Sadece Çalışanları Göster"}
           </Button>
 
+          {/* Hücre Girişi Toggle */}
+          {!ayKapali && (
+            <Button
+              type="button"
+              variant={hucreSecimModu ? "default" : "outline"}
+              size="sm"
+              id={`btn-hucre-secim-proje-${projeId}`}
+              onClick={handleHucreSecimToggle}
+              className="h-7 text-xs gap-1.5"
+            >
+              <SquareMousePointer className="h-3.5 w-3.5" />
+              Hücre Girişi
+              {hucreSecimModu && secilenHucreler.size > 0 && (
+                <Badge variant="secondary" className="ml-0.5 text-xs px-1.5 py-0 h-4">
+                  {secilenHucreler.size}
+                </Badge>
+              )}
+            </Button>
+          )}
+
           {/* Excel Export */}
           {!isLoading && gosterilecekPersoneller.length > 0 && (
             <ExcelExportButton
@@ -250,6 +327,32 @@ export function ProjeAyPuantajTablosu({
         </div>
       </div>
 
+      {/* Hücre Seçim Modu — bilgi şeridi */}
+      {hucreSecimModu && (
+        <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
+          <SquareMousePointer className="h-3.5 w-3.5 shrink-0" />
+          <span>
+            Hücre seçim modu aktif — hücrelere tıklayarak seçin, ardından{" "}
+            <strong>Hücre Girişi</strong> butonuna tekrar tıklayın.
+          </span>
+          {secilenHucreler.size > 0 && (
+            <span className="font-semibold ml-1">
+              {secilenHucreler.size} hücre seçili
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setHucreSecimModu(false);
+              setSecilenHucreler(new Set());
+            }}
+            className="ml-auto text-muted-foreground hover:text-foreground transition-colors"
+            title="Seçim modunu kapat"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
       {/* Puantaj Matrisi */}
       <div className="rounded-lg border bg-background overflow-x-auto shadow-sm">
         <Table className="text-xs">
@@ -379,14 +482,28 @@ export function ProjeAyPuantajTablosu({
                           <ProjePuantajHucre
                             durum={hucreDurum}
                             pazar={pazar}
-                            onClick={() =>
-                              setSecilenHucre({
-                                personelId: p.id,
-                                personelAd: `${p.ad} ${p.soyad}`,
-                                tarih: tarihStr,
-                                mevcutVeri: modalVeri,
-                              })
-                            }
+                            secimModu={hucreSecimModu}
+                            secili={secilenHucreler.has(`${p.id}|${tarihStr}`)}
+                            onClick={() => {
+                              if (hucreSecimModu) {
+                                // Seçim modunda: toggle
+                                const key = `${p.id}|${tarihStr}`;
+                                setSecilenHucreler((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(key)) next.delete(key);
+                                  else next.add(key);
+                                  return next;
+                                });
+                              } else {
+                                // Normal mod: tekli modal aç
+                                setSecilenHucre({
+                                  personelId: p.id,
+                                  personelAd: `${p.ad} ${p.soyad}`,
+                                  tarih: tarihStr,
+                                  mevcutVeri: modalVeri,
+                                });
+                              }
+                            }}
                           />
                         </TableCell>
                       );
@@ -461,6 +578,26 @@ export function ProjeAyPuantajTablosu({
               tarih: secilenHucre.tarih,
             });
             return sonuc as { hata?: string; basarili?: boolean };
+          }}
+        />
+      )}
+
+      {/* Hücre Seçim Modu — Toplu Veri Girişi Modal */}
+      {topluModalAcik && (
+        <GunVeriGirisiModal
+          key="toplu-proje-hucre-girisi"
+          acik={topluModalAcik}
+          personelId=""
+          personelAd=""
+          tarih=""
+          yil={yil}
+          ay={ay}
+          topluHucreSayisi={secilenHucreler.size}
+          onTopluKaydet={handleTopluHucreKaydet}
+          onKapat={() => {
+            setTopluModalAcik(false);
+            setHucreSecimModu(false);
+            setSecilenHucreler(new Set());
           }}
         />
       )}

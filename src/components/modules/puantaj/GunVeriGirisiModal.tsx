@@ -79,6 +79,10 @@ interface GunVeriGirisiModalProps {
   onSilOverride?: () => Promise<{ hata?: string; basarili?: boolean } | undefined>;
   /** O gün hangi gemide çalışıldığı (proje adı) */
   projeAdi?: string;
+  /** Toplu mod: kaç hücre seçili olduğu — tanımlıysa başlık ve davranış değişir */
+  topluHucreSayisi?: number;
+  /** Toplu mod: override yerine seçili tüm hücrelere aynı veriyi uygular */
+  onTopluKaydet?: (veri: PuantajGunVerisi) => Promise<{ hata?: string; eklenenSayisi?: number }>;
 }
 
 type Mod = "giris_cikis" | "tam_yarim" | "ozel_durum";
@@ -210,6 +214,8 @@ export function GunVeriGirisiModal({
   onKaydetOverride,
   onSilOverride,
   projeAdi,
+  topluHucreSayisi,
+  onTopluKaydet,
 }: GunVeriGirisiModalProps) {
   const kaydetMutation = useGunVeriGir(yil, ay);
   const silMutation = useGunVeriSil(yil, ay);
@@ -339,6 +345,19 @@ export function GunVeriGirisiModal({
     }
 
     startTransition(async () => {
+      // Toplu mod: onTopluKaydet varsa tüm seçili hücrelere uygula
+      if (onTopluKaydet) {
+        const sonuc = await onTopluKaydet(veri);
+        if (sonuc?.hata) {
+          toast.error(sonuc.hata);
+          return;
+        }
+        const sayi = sonuc?.eklenenSayisi ?? 0;
+        toast.success(`${sayi} hücreye uygulandı.`);
+        onKapat();
+        return;
+      }
+      // Tekli mod
       const sonuc = onKaydetOverride
         ? await onKaydetOverride(veri)
         : await kaydetMutation.mutateAsync({ personelId, tarih, veri });
@@ -370,14 +389,22 @@ export function GunVeriGirisiModal({
       <DialogContent className="sm:max-w-md" id="dialog-gun-veri-girisi">
         <DialogHeader>
           <DialogTitle className="text-base">
-            <span className="font-bold">{personelAd}</span>
-            <span className="text-muted-foreground font-normal mx-2">•</span>
-            <span className="text-muted-foreground font-normal text-sm">
-              {tarihFormatla(tarih)}
-            </span>
+            {topluHucreSayisi != null ? (
+              /* ── Toplu mod başlığı ── */
+              <span className="font-bold">{topluHucreSayisi} Hücreye Toplu Giriş</span>
+            ) : (
+              /* ── Tekli mod başlığı (mevcut) ── */
+              <>
+                <span className="font-bold">{personelAd}</span>
+                <span className="text-muted-foreground font-normal mx-2">•</span>
+                <span className="text-muted-foreground font-normal text-sm">
+                  {tarihFormatla(tarih)}
+                </span>
+              </>
+            )}
           </DialogTitle>
-          {/* Proje (gemi) bilgisi */}
-          {projeAdi && (
+          {/* Proje (gemi) bilgisi — sadece tekli modda */}
+          {projeAdi && !topluHucreSayisi && (
             <div className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 font-medium pt-0.5">
               <Ship className="h-3.5 w-3.5 shrink-0" />
               <span>{projeAdi}</span>
@@ -637,9 +664,9 @@ export function GunVeriGirisiModal({
         </div>
 
         <DialogFooter className="gap-2 flex-col sm:flex-row">
-          {/* Sol: Sil butonu */}
+          {/* Sol: Sil butonu — toplu modda gizlenir */}
           <div className="flex-1">
-            {kayitVar && (
+            {kayitVar && !topluHucreSayisi && (
               <Button
                 variant="destructive"
                 size="sm"
