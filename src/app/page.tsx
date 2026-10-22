@@ -2,6 +2,7 @@
 
 // ─── Imports ───────────────────────────────────────────────────────────────
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 
 // ─── Tipler ────────────────────────────────────────────────────────────────
 type Tema = "light" | "dark";
@@ -203,12 +204,12 @@ function NavBar({ tema, temaToggle }: { tema: Tema; temaToggle: () => void }) {
             )}
           </button>
 
-          <a
-            href="/login"
+          <Link
+            href="/giris"
             className="hidden h-9 items-center rounded-xl bg-zinc-950 px-4 text-[13px] font-semibold text-white hover:bg-zinc-800 active:scale-[0.97] transition-all duration-200 dark:bg-amber-500 dark:text-zinc-950 dark:hover:bg-amber-400 md:flex"
           >
             {icerik.nav.girisYap}
-          </a>
+          </Link>
         </div>
       </div>
     </header>
@@ -242,12 +243,12 @@ function Hero() {
 
         {/* CTA — sadece giriş */}
         <div className="flex flex-wrap items-center justify-center gap-3">
-          <a
-            href="/login"
+          <Link
+            href="/giris"
             className="inline-flex h-12 items-center rounded-2xl bg-zinc-950 px-7 text-sm font-semibold text-white shadow-lg hover:scale-[1.02] active:scale-[0.97] transition-all duration-200 dark:bg-amber-500 dark:text-zinc-950 dark:hover:bg-amber-400"
           >
             Platforma Giriş Yap
-          </a>
+          </Link>
         </div>
       </div>
 

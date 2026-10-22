@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function AuthLayout({
   children,
 }: {
@@ -19,12 +21,12 @@ export default function AuthLayout({
         />
 
         {/* Logo */}
-        <a href="/" className="relative z-10 flex items-center gap-3 self-start">
+        <Link href="/" className="relative z-10 flex items-center gap-3 self-start">
           <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center">
             <span className="text-zinc-950 font-black text-base leading-none">H</span>
           </div>
           <span className="text-white font-semibold tracking-tight text-lg">Hilal Office</span>
-        </a>
+        </Link>
 
         {/* Center quote */}
         <div className="relative z-10 flex flex-col gap-8">

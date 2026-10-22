@@ -33,6 +33,16 @@ const nextConfig: NextConfig = {
     "*.local",
     "localhost:3000"
   ],
+
+  async redirects() {
+    return [
+      {
+        source: "/login",
+        destination: "/giris",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
