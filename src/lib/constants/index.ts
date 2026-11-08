@@ -118,6 +118,11 @@ export const QUERY_KEYS = {
   PERSONEL_PUANTAJ: (personelId: string, yil: number, ay?: number | null) =>
     ["personel_puantaj", personelId, yil, ay ?? "tum"] as const,
   // Cari Modülü
+  // Hilal Tevzi
+  TEVZI_LISTESI:  (sirketId: string) => ["hilal_tevzi", "liste", sirketId] as const,
+  TEVZI_KAYIT:    (sirketId: string, tarih: string) => ["hilal_tevzi", "kayit", sirketId, tarih] as const,
+  TEVZI_ONCEKI:   (sirketId: string) => ["hilal_tevzi", "onceki", sirketId] as const,
+  // Cari Modülü
   CARI_BELGE_LIST:  (sirketId: string) => ["cari", "belge", "list", sirketId] as const,
   CARI_BELGE_DETAY: (belgeId: string)  => ["cari", "belge", "detay", belgeId] as const,
   CARI_DOSYA_LIST:  (belgeId: string)  => ["cari", "dosya", "list", belgeId] as const,

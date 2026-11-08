@@ -1691,6 +1691,44 @@ export type Database = {
           },
         ]
       }
+      hilal_tevzi_kayitlari: {
+        Row: {
+          id: string
+          sirket_id: string
+          tarih: string
+          satirlar: Json
+          olusturan_id: string
+          created_at: string
+          guncellendi_at: string
+        }
+        Insert: {
+          id?: string
+          sirket_id: string
+          tarih: string
+          satirlar?: Json
+          olusturan_id: string
+          created_at?: string
+          guncellendi_at?: string
+        }
+        Update: {
+          id?: string
+          sirket_id?: string
+          tarih?: string
+          satirlar?: Json
+          olusturan_id?: string
+          created_at?: string
+          guncellendi_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hilal_tevzi_kayitlari_sirket_id_fkey"
+            columns: ["sirket_id"]
+            isOneToOne: false
+            referencedRelation: "sirketler"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

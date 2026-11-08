@@ -182,3 +182,15 @@
   background: var(--accent) !important;
   color: var(--accent-foreground) !important;
 }
+
+/* ─── Hilal Tevzi Drawer Animasyonları ─────────────────────────────────────── */
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes slide-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.animate-slide-up    { animation: slide-up    0.22s cubic-bezier(0.32, 0.72, 0, 1); }
+.animate-slide-right { animation: slide-right 0.22s cubic-bezier(0.32, 0.72, 0, 1); }

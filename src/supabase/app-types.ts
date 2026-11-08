@@ -74,6 +74,15 @@ export type TersaneOzelBelgeRow   = Tables<"tersane_ozel_belge">;
 export type TersaneOzelBelgeInsert = TablesInsert<"tersane_ozel_belge">;
 export type TersaneOzelBelgeUpdate = TablesUpdate<"tersane_ozel_belge">;
 
+// ─── Hilal Tevzi Modülü ────────────────────────────────────────────────────────
+/** hilal_tevzi_kayitlari.satirlar jsonb elemanı */
+export interface TevziSatirType {
+  no: number;
+  adSoyad: string;
+  gorev: string;
+  calismaAlani: string;
+}
+
 // ─── Garaj Modülü Tablo Tipleri ───────────────────────────────────────────────
 export type AracRow             = Tables<"araclar">;
 export type AracInsert          = TablesInsert<"araclar">;
